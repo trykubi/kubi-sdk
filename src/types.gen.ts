@@ -1066,9 +1066,9 @@ export interface components {
         MaxUpscale: "fit" | number;
         /**
          * ScreenState
-         * @description Power state. `failed` carries a state_reason. New values may appear.
+         * @description Power state. `waiting`: paid, waiting for a machine; it starts on its own when one has room. `failed` carries a state_reason. New values may appear.
          */
-        ScreenState: ("provisioning" | "starting" | "running" | "stopping" | "stopped" | "restarting" | "deleting" | "deleted" | "failed") | string;
+        ScreenState: ("waiting" | "provisioning" | "starting" | "running" | "stopping" | "stopped" | "restarting" | "deleting" | "deleted" | "failed") | string;
         /**
          * Health
          * @description Each capability on its own: a running VM can have a broken display. Host unreachable means unknown.

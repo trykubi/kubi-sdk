@@ -5422,6 +5422,7 @@ components:
       anyOf:
       - type: string
         enum:
+        - waiting
         - provisioning
         - starting
         - running
@@ -5435,7 +5436,8 @@ components:
       - type: string
         maxLength: 20
       title: ScreenState
-      description: Power state. `failed` carries a state_reason. New values may appear.
+      description: 'Power state. `waiting`: paid, waiting for a machine; it starts on its own when one has room.
+        `failed` carries a state_reason. New values may appear.'
     Health:
       type: object
       title: Health
