@@ -1,0 +1,7 @@
+# Package rules (the kubi folder's product.md, SDK: releases): only packages at least 3 days old, no install
+# scripts from dependencies.
+minimumReleaseAge: 4320
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+allowBuilds:
+  esbuild: false

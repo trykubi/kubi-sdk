@@ -1,0 +1,63 @@
+{
+  "name": "@trykubi/sdk",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for Kubi: cloud desktops for AI agents",
+  "license": "Apache-2.0",
+  "homepage": "https://docs.trykubi.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trykubi/kubi-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/trykubi/kubi-sdk/issues"
+  },
+  "keywords": [
+    "kubi",
+    "ai-agents",
+    "computer-use",
+    "linux-desktop",
+    "mcp",
+    "sdk"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "gen": "scripts/gen.sh",
+    "typecheck": "node node_modules/typescript-native/bin/tsc -p tsconfig.json",
+    "lint": "biome check .",
+    "test": "vitest run",
+    "build": "rm -rf dist && node node_modules/typescript/bin/tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3",
+    "@types/node": "26.6.6",
+    "ajv": "8.20.0",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "typescript-native": "npm:typescript@7.0.2",
+    "vitest": "5.0.5",
+    "yaml": "2.9.1"
+  }
+}

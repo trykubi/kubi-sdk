@@ -1,0 +1,31 @@
+# Publishes @trykubi/sdk to npm when a version tag (v1.2.3) is pushed. The job waits in the npm environment
+# for a maintainer's approval, runs the full check from the frozen lockfile, and publishes through npm's trusted
+# publishing (OIDC, no token) with a provenance attestation. Actions are pinned to commit SHAs.
+name: publish
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+          registry-url: 'https://registry.npmjs.org'
+      - name: the tag is the package version
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: ./check.sh
+      - run: pnpm -s build
+      - name: publish
+        run: npm publish --provenance --access public
