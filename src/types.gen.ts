@@ -710,6 +710,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/screens/{screen_id}/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List installed apps
+         * @description Needs the `read` permission. Answers within 5 s.
+         *
+         *     The apps installed on the screen, from their desktop entries: an id to `launch` in runActions, the name, what each is for and whether a window of it is open. Terminal emulators say so and launch only with `terminal: true`.
+         */
+        get: operations["listApps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{screen_id}/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read or act on a browser tab
+         * @description Needs the `control` permission. Answers within 10 s.
+         *
+         *     A Chromium or Chrome tab as compact rows, each link, button and field with a ref, its text and its value, and `click`, `fill`, `select`, `check`, `press`, `navigate` and `back` by ref, each answering with the page after it. It needs the browser's debugging port inside the screen, which the screen's own Chromium opens; `prepare` says whether it answers and, with `relaunch`, restarts a browser started without it on the same profile. Actions are the browser's own trusted input and count as input: they make older screenshots stale. No caller's script runs in the page.
+         */
+        post: operations["runPage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{screen_id}/script": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a GUI script
+         * @description Needs the `control` permission. Answers within 28 s.
+         *
+         *     Runs a short JavaScript program inside the screen that calls only the screen's own GUI functions: `screenshot(opts)`, `tree(q)`, `find(q)` (every window), `act(actions, opts)` (a batch, as runActions), `wait(ms)`, `expect(cond)`, `apps()`, `launch(id)`, `page(req)` and `log(...)`. Loops, branches and read-then-act logic then cost one call. A failed call throws an error with its `code`. There are no files, network, processes or timers. Limits: 32 KiB of code, `timeout_ms` (28 s at most), 200 calls, 64 KiB of log and of result. A script sees a screenshot's id and size, never its pixels; with `screenshot: after` one image comes back. A person taking control stops it at its next call (`stopped`). History keeps each action it ran as its own row.
+         */
+        post: operations["runScript"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/screens/{screen_id}/viewer": {
         parameters: {
             query?: never;
@@ -1199,6 +1265,12 @@ export interface components {
              * @description Disposable only: delete it this many seconds after it is created. Default: no end time.
              */
             ends_in_s?: number;
+            /**
+             * @description The desktop's size. Screenshots come at 1280x720 either way unless a call asks for `full`. A template's screen keeps the template's size.
+             * @default 1920x1080
+             * @enum {string}
+             */
+            desktop?: "1920x1080" | "1280x720";
         };
         /**
          * ScreenUpdate
@@ -1344,6 +1416,8 @@ export interface components {
             data: string;
             /** @description With `windows=true`: the open windows, topmost first, in this screenshot's pixels (a region's: the full screenshot's). Normal windows and dialogs only; at most 50. */
             windows?: components["schemas"]["WindowInfo"][];
+            /** @description With `marks=true`: the elements whose ids are drawn on the image, bound to this screenshot_id for `element` in runActions. */
+            marks?: components["schemas"]["Mark"][];
         };
         /**
          * WindowId
@@ -1360,6 +1434,23 @@ export interface components {
             title: string;
             /** @description The app, from the window's class (for example `chromium`, `org.gnome.TextEditor`). */
             app: string;
+        };
+        /**
+         * Mark
+         * @description One element marked on a screenshot: its id is drawn in a box at its top left corner.
+         */
+        Mark: {
+            id: string;
+            role: string;
+            name: string;
+            /** Format: int32 */
+            x: number;
+            /** Format: int32 */
+            y: number;
+            /** Format: int32 */
+            width: number;
+            /** Format: int32 */
+            height: number;
         };
         /**
          * WindowInfo
@@ -1381,6 +1472,8 @@ export interface components {
             height: number;
             /** @description true for the window with the keyboard focus. */
             active: boolean;
+            /** @description minimized: listed so it can be restored with the `window` action; it is never under a point. */
+            state?: ("normal" | "maximized" | "minimized" | "fullscreen") | string;
         };
         /**
          * ScreenshotOptions
@@ -1442,7 +1535,7 @@ export interface components {
         };
         /**
          * ActionMove
-         * @description Move the pointer (hover), to x and y or to an element.
+         * @description Move the pointer (hover), to x and y or to an element. A batch ending in a move settles for at least 700 ms, so a tooltip shows in the after-shot.
          */
         ActionMove: {
             /**
@@ -1453,6 +1546,12 @@ export interface components {
             x?: components["schemas"]["Coordinate"];
             y?: components["schemas"]["Coordinate"];
             element?: components["schemas"]["ElementId"];
+            /**
+             * Format: int32
+             * @description Rest the pointer this long after it arrives, for hover menus and tooltips.
+             * @default 0
+             */
+            dwell_ms?: number;
         };
         /**
          * ActionMouseDown
@@ -1688,6 +1787,118 @@ export interface components {
             window: components["schemas"]["WindowId"];
         };
         /**
+         * ActionWindow
+         * @description Move or resize a window (x, y, width, height in the coordinate space, any of them), or maximize, minimize, restore or close it. A minimized window stays in the window list.
+         */
+        ActionWindow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "window";
+            window: components["schemas"]["WindowId"];
+            x?: components["schemas"]["Coordinate"];
+            y?: components["schemas"]["Coordinate"];
+            /** Format: int32 */
+            width?: number;
+            /** Format: int32 */
+            height?: number;
+            /** @enum {string} */
+            state?: "maximize" | "minimize" | "restore" | "close";
+        };
+        /**
+         * ActionSelect
+         * @description Pick an option of a dropdown, combo box or list by its text, then read the choice back in `value`.
+         */
+        ActionSelect: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "select";
+            element: components["schemas"]["ElementId"];
+            /** @description The option's text: matched exactly, then ignoring case, then as a part. */
+            option: string;
+        };
+        /**
+         * ActionCheck
+         * @description Make a check box, switch or toggle checked. Nothing happens when it already is; the result says `checked`.
+         */
+        ActionCheck: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "check";
+            element: components["schemas"]["ElementId"];
+        };
+        /**
+         * ActionUncheck
+         * @description Make a check box, switch or toggle unchecked, as check does.
+         */
+        ActionUncheck: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "uncheck";
+            element: components["schemas"]["ElementId"];
+        };
+        /**
+         * ActionExpand
+         * @description Open a tree row, group or menu. Nothing happens when it already is open; the result says `expanded`.
+         */
+        ActionExpand: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "expand";
+            element: components["schemas"]["ElementId"];
+        };
+        /**
+         * ActionCollapse
+         * @description Close a tree row, group or menu.
+         */
+        ActionCollapse: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "collapse";
+            element: components["schemas"]["ElementId"];
+        };
+        /**
+         * ActionScrollTo
+         * @description Scroll an element into view in its window.
+         */
+        ActionScrollTo: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "scroll_to";
+            element: components["schemas"]["ElementId"];
+        };
+        /**
+         * ActionLaunch
+         * @description Start an installed app by its id and wait up to 10 s for its window, then bring it to the front. The result names the window in `window`; `tree: after` reads it.
+         */
+        ActionLaunch: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "launch";
+            /** @description An app id from listApps. */
+            app: string;
+            /**
+             * @description Required to launch a terminal emulator.
+             * @default false
+             */
+            terminal?: boolean;
+        };
+        /**
          * ActionScreenshot
          * @description Capture mid-batch (after settling). Counts toward 4 images per reply. The hosted MCP rejects it inside `act`.
          */
@@ -1730,9 +1941,9 @@ export interface components {
         };
         /**
          * Action
-         * @description One input step, picked by `type` (18 types). Covers Anthropic's 17 computer tools, OpenAI's computer actions and Gemini's desktop actions; the docs' model guide maps each one.
+         * @description One input step, picked by `type` (26 types). Covers Anthropic's 17 computer tools, OpenAI's computer actions and Gemini's desktop actions; the docs' model guide maps each one.
          */
-        Action: components["schemas"]["ActionClick"] | components["schemas"]["ActionMove"] | components["schemas"]["ActionMouseDown"] | components["schemas"]["ActionMouseUp"] | components["schemas"]["ActionDrag"] | components["schemas"]["ActionScroll"] | components["schemas"]["ActionType"] | components["schemas"]["ActionKey"] | components["schemas"]["ActionKeyDown"] | components["schemas"]["ActionKeyUp"] | components["schemas"]["ActionWait"] | components["schemas"]["ActionSettle"] | components["schemas"]["ActionCursorPosition"] | components["schemas"]["ActionSetValue"] | components["schemas"]["ActionInvoke"] | components["schemas"]["ActionFocus"] | components["schemas"]["ActionScreenshot"] | components["schemas"]["ActionZoom"];
+        Action: components["schemas"]["ActionClick"] | components["schemas"]["ActionMove"] | components["schemas"]["ActionMouseDown"] | components["schemas"]["ActionMouseUp"] | components["schemas"]["ActionDrag"] | components["schemas"]["ActionScroll"] | components["schemas"]["ActionType"] | components["schemas"]["ActionKey"] | components["schemas"]["ActionKeyDown"] | components["schemas"]["ActionKeyUp"] | components["schemas"]["ActionWait"] | components["schemas"]["ActionSettle"] | components["schemas"]["ActionCursorPosition"] | components["schemas"]["ActionSetValue"] | components["schemas"]["ActionInvoke"] | components["schemas"]["ActionFocus"] | components["schemas"]["ActionWindow"] | components["schemas"]["ActionSelect"] | components["schemas"]["ActionCheck"] | components["schemas"]["ActionUncheck"] | components["schemas"]["ActionExpand"] | components["schemas"]["ActionCollapse"] | components["schemas"]["ActionScrollTo"] | components["schemas"]["ActionLaunch"] | components["schemas"]["ActionScreenshot"] | components["schemas"]["ActionZoom"];
         /**
          * TreeElement
          * @description One element, its place in the coordinate space of the tree's screenshot_id.
@@ -1772,6 +1983,8 @@ export interface components {
             unlisted_children?: number;
             /** @description For a control with no name: which of its kind it is. */
             note?: string;
+            /** @description With `window=all`: the window the element is in. */
+            window?: components["schemas"]["WindowId"];
         };
         /** AccessibilityTree */
         AccessibilityTree: {
@@ -1905,6 +2118,17 @@ export interface components {
             value?: string | null;
             /** @description invoke: the action run. */
             invoked?: string;
+            /** @description check and uncheck: the state read back. */
+            checked?: boolean;
+            /** @description expand and collapse: the state read back. */
+            expanded?: boolean;
+            /** @description launch: the app started. */
+            app?: string;
+            /**
+             * Format: int32
+             * @description launch: its process id.
+             */
+            pid?: number;
             /** Format: int32 */
             duration_ms: number;
         };
@@ -2011,6 +2235,130 @@ export interface components {
             size_bytes: number;
             /** Format: date-time */
             modified_at: string;
+        };
+        /**
+         * App
+         * @description One installed app, from its desktop entry.
+         */
+        App: {
+            /** @description Send it as `app` in a `launch` action. */
+            id: string;
+            name: string;
+            /** @description What the app is for. */
+            comment?: string;
+            categories: string[];
+            /** @description A terminal emulator: launch needs `terminal: true`. */
+            terminal: boolean;
+            /** @description A window of it is open. */
+            running: boolean;
+        };
+        /** AppList */
+        AppList: {
+            data: components["schemas"]["App"][];
+        };
+        /** PageRequest */
+        PageRequest: {
+            /**
+             * @description prepare: say whether the browser can be read (and with `relaunch`, restart it so it can). read: the tab as rows. The rest act on a `ref` from the last read, or on the tab, then answer with the page after.
+             * @enum {string}
+             */
+            op: "prepare" | "read" | "click" | "fill" | "select" | "check" | "press" | "navigate" | "back";
+            /** @description A ref from the last read of this tab. */
+            ref?: string;
+            /** @description fill: the text. select: the option's text or value. check: `true` or `false`. */
+            value?: string;
+            /** @description press: a key or chord, as in `key`. */
+            keys?: string;
+            /** @description navigate: where to go. */
+            url?: string;
+            /** @description read: keep the rows that contain this (any of `a|b`). */
+            query?: string;
+            /** @description A tab id from the last answer's `tabs`. Default: the tab in the active window. */
+            tab?: string;
+            /**
+             * @description prepare: when the browser has no debugging port, close it and start it again on the same profile with the port open. Its open tabs are restored only as the browser restores them.
+             * @default false
+             */
+            relaunch?: boolean;
+            /**
+             * @description Actions: answer with the rows after.
+             * @default true
+             */
+            read_after?: boolean;
+        };
+        /** PageTab */
+        PageTab: {
+            id: string;
+            title: string;
+            url: string;
+            active: boolean;
+        };
+        /** PageResult */
+        PageResult: {
+            op: string;
+            /** @description The browser's debugging port answers. */
+            ready: boolean;
+            browser?: string | null;
+            tab?: components["schemas"]["PageTab"] | null;
+            tabs?: components["schemas"]["PageTab"][];
+            /** @description The page as rows: `[r12] button "Save"`, a field with its value (`[r3] textbox "Email" = "ana@example.com"`), cut at 8,000 characters for read and 4,000 after an action. Never a password's value. */
+            text?: string;
+            /**
+             * Format: int32
+             * @description How many refs the read gave.
+             */
+            refs?: number;
+            truncated?: boolean;
+            /** @description Actions: the URL changed. */
+            navigated?: boolean;
+            /** @description prepare: what to do when the browser can't be read. */
+            note?: string;
+        };
+        /** ScriptRequest */
+        ScriptRequest: {
+            /** @description JavaScript (ES2020) run as a function body; `return` gives `result`. Calls: screenshot(opts), tree(q), find(q), act(actions, opts), wait(ms), expect(cond), apps(), launch(id), page(req), log(...). */
+            code: string;
+            /**
+             * @description after: attach the screen after the script, once it settles.
+             * @default none
+             * @enum {string}
+             */
+            screenshot?: "after" | "none";
+            screenshot_options?: components["schemas"]["ScreenshotOptions"];
+            /**
+             * Format: int32
+             * @default 28000
+             */
+            timeout_ms?: number;
+        };
+        /**
+         * ScriptCall
+         * @description One call the script made, in order.
+         */
+        ScriptCall: {
+            /** Format: int32 */
+            index: number;
+            fn: string;
+            ok: boolean;
+            /** @description The error code when it failed. */
+            code?: string;
+            summary?: string;
+            /** Format: int32 */
+            duration_ms: number;
+        };
+        /** ScriptResult */
+        ScriptResult: {
+            /** @description error: the script threw (see `error`). timeout: it ran past timeout_ms. stopped: a person took control (`error` is CONTROL_HELD). */
+            status: ("ok" | "error" | "timeout" | "stopped") | string;
+            /** @description What the script returned, as JSON, at most 64 KiB. */
+            result?: unknown;
+            /** @description What log() wrote, cut at 64 KiB. */
+            log: string;
+            error?: components["schemas"]["ErrorBody"];
+            calls: components["schemas"]["ScriptCall"][];
+            screenshot?: components["schemas"]["Screenshot"] | null;
+            /** Format: int32 */
+            duration_ms: number;
         };
         /** Clipboard */
         Clipboard: {
@@ -2340,6 +2688,12 @@ export interface components {
             x?: components["schemas"]["Coordinate"];
             y?: components["schemas"]["Coordinate"];
             element?: components["schemas"]["ElementId"];
+            /**
+             * Format: int32
+             * @description Rest the pointer this long after it arrives, for hover menus and tooltips.
+             * @default 0
+             */
+            dwell_ms?: number;
             /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. The hosted MCP always sends it. */
             screenshot_id?: string;
             /**
@@ -2648,6 +3002,7 @@ export type OperationList = components['schemas']['OperationList'];
 export type Screenshot = components['schemas']['Screenshot'];
 export type WindowId = components['schemas']['WindowId'];
 export type WindowRef = components['schemas']['WindowRef'];
+export type Mark = components['schemas']['Mark'];
 export type WindowInfo = components['schemas']['WindowInfo'];
 export type ScreenshotOptions = components['schemas']['ScreenshotOptions'];
 export type ElementId = components['schemas']['ElementId'];
@@ -2667,6 +3022,14 @@ export type ActionCursorPosition = components['schemas']['ActionCursorPosition']
 export type ActionSetValue = components['schemas']['ActionSetValue'];
 export type ActionInvoke = components['schemas']['ActionInvoke'];
 export type ActionFocus = components['schemas']['ActionFocus'];
+export type ActionWindow = components['schemas']['ActionWindow'];
+export type ActionSelect = components['schemas']['ActionSelect'];
+export type ActionCheck = components['schemas']['ActionCheck'];
+export type ActionUncheck = components['schemas']['ActionUncheck'];
+export type ActionExpand = components['schemas']['ActionExpand'];
+export type ActionCollapse = components['schemas']['ActionCollapse'];
+export type ActionScrollTo = components['schemas']['ActionScrollTo'];
+export type ActionLaunch = components['schemas']['ActionLaunch'];
 export type ActionScreenshot = components['schemas']['ActionScreenshot'];
 export type ActionZoom = components['schemas']['ActionZoom'];
 export type Action = components['schemas']['Action'];
@@ -2684,6 +3047,14 @@ export type Exec = components['schemas']['Exec'];
 export type ExecKill = components['schemas']['ExecKill'];
 export type FileWritten = components['schemas']['FileWritten'];
 export type FileEntry = components['schemas']['FileEntry'];
+export type App = components['schemas']['App'];
+export type AppList = components['schemas']['AppList'];
+export type PageRequest = components['schemas']['PageRequest'];
+export type PageTab = components['schemas']['PageTab'];
+export type PageResult = components['schemas']['PageResult'];
+export type ScriptRequest = components['schemas']['ScriptRequest'];
+export type ScriptCall = components['schemas']['ScriptCall'];
+export type ScriptResult = components['schemas']['ScriptResult'];
 export type Clipboard = components['schemas']['Clipboard'];
 export type ClipboardSet = components['schemas']['ClipboardSet'];
 export type FileList = components['schemas']['FileList'];
@@ -3814,6 +4185,8 @@ export interface operations {
                 settle?: boolean;
                 /** @description true: also list the open windows (title, app, place, which is active) in `windows`. */
                 windows?: boolean;
+                /** @description true: draw the id of each element an agent can act on in the active window on the image, list them in `marks` and bind them to this screenshot_id, so a model can act by `element` without reading the tree. 409 UNSUPPORTED_CAPABILITY on a screen that can't read trees. */
+                marks?: boolean;
             };
             header?: {
                 /**
@@ -3956,8 +4329,8 @@ export interface operations {
     getAccessibilityTree: {
         parameters: {
             query?: {
-                /** @description A window id from the window list. Default: the active window. */
-                window?: components["schemas"]["WindowId"];
+                /** @description A window id from the window list, or `all` for every open window, topmost first, at most 12, with a header row per window and each element's `window` set; with `query` it finds an element wherever it is. Default: the active window. */
+                window?: string;
                 /** @description `x0,y0,x1,y1` in the screenshot's pixels: keep the elements there. A point is a 1x1 region. Without `window`, the topmost window at the region's centre. */
                 region?: string;
                 /** @description Bind the ids to this screenshot and give places in its pixels. 409 STALE_OBSERVATION if input ran since. */
@@ -5048,6 +5421,200 @@ export interface operations {
             /** @description Unsupported media type: UNSUPPORTED_MEDIA_TYPE. */
             415: components["responses"]["UnsupportedMediaType"];
             /** @description Unprocessable: SECRET_BLOCKED. */
+            422: components["responses"]["Unprocessable"];
+            /** @description Rate limited: RATE_LIMITED. */
+            429: components["responses"]["TooManyRequests"];
+            /** @description Internal error: INTERNAL. */
+            500: components["responses"]["InternalError"];
+            /** @description Screen unavailable: SCREEN_UNAVAILABLE. */
+            503: components["responses"]["Unavailable"];
+            /** @description Outcome unknown: OUTCOME_UNKNOWN. */
+            504: components["responses"]["OutcomeUnknown"];
+        };
+    };
+    listApps: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional label that groups calls into one run in the screen's history. It is only a label and never locks the screen. The SDK fills it from KUBI_RUN, else Claude Code's CLAUDE_CODE_SESSION_ID, else one id per client it creates.
+                 * @example 6f1c2a90-3d4b-4e8f-9a1c-7b2d5e8f0a13
+                 */
+                "Kubi-Run"?: components["parameters"]["Run"];
+            };
+            path: {
+                /**
+                 * @description Screen id (`scr_...`).
+                 * @example scr_7f2kq9w3x8m4b6tzp1ac
+                 */
+                screen_id: components["parameters"]["ScreenId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    "Billing-Warning": components["headers"]["BillingWarning"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppList"];
+                };
+            };
+            /** @description Bad request: INVALID_ARGUMENT. */
+            400: components["responses"]["BadRequest"];
+            /** @description Not authenticated: UNAUTHENTICATED. */
+            401: components["responses"]["Unauthorized"];
+            /** @description Not allowed: PERMISSION_DENIED. */
+            403: components["responses"]["Forbidden"];
+            /** @description Not found: SCREEN_NOT_FOUND. */
+            404: components["responses"]["NotFound"];
+            /** @description Conflict with the screen's state: CONTROL_HELD, SCREEN_NOT_RUNNING, UNSUPPORTED_CAPABILITY. */
+            409: components["responses"]["Conflict"];
+            /** @description Rate limited: RATE_LIMITED. */
+            429: components["responses"]["TooManyRequests"];
+            /** @description Internal error: INTERNAL. */
+            500: components["responses"]["InternalError"];
+            /** @description Screen unavailable: SCREEN_UNAVAILABLE. */
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    runPage: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Any unique string, ideally a UUIDv7; the SDK and MCP always send one. A retry with the same key and body gets the stored answer instead of running twice (kept 24 h for screens and power, 10 minutes for actions and commands). Stored once execution began: 2xx, 500 and 504. Never stored when `outcome` is `not_applied` (400, 401, 403, 404, 409, 415, 422, 429), so the same key can be retried after a conflict or a rate limit. Replays of runActions keep per-action results and shot metadata only, capture a fresh screenshot and carry `Idempotent-Replayed: true`. Same key, different body: 422 IDEMPOTENCY_KEY_REUSED. Same key still running: 409 IDEMPOTENCY_KEY_IN_USE.
+                 * @example 01929f6e-7c1a-7b3e-9d2f-5a8c4e6b1d03
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /**
+                 * @description Optional label that groups calls into one run in the screen's history. It is only a label and never locks the screen. The SDK fills it from KUBI_RUN, else Claude Code's CLAUDE_CODE_SESSION_ID, else one id per client it creates.
+                 * @example 6f1c2a90-3d4b-4e8f-9a1c-7b2d5e8f0a13
+                 */
+                "Kubi-Run"?: components["parameters"]["Run"];
+            };
+            path: {
+                /**
+                 * @description Screen id (`scr_...`).
+                 * @example scr_7f2kq9w3x8m4b6tzp1ac
+                 */
+                screen_id: components["parameters"]["ScreenId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageRequest"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Billing-Warning": components["headers"]["BillingWarning"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageResult"];
+                };
+            };
+            /** @description Bad request: INVALID_ARGUMENT. */
+            400: components["responses"]["BadRequest"];
+            /** @description Not authenticated: UNAUTHENTICATED. */
+            401: components["responses"]["Unauthorized"];
+            /** @description Not allowed: PERMISSION_DENIED. */
+            403: components["responses"]["Forbidden"];
+            /** @description Not found: SCREEN_NOT_FOUND. */
+            404: components["responses"]["NotFound"];
+            /** @description Conflict with the screen's state: CONTROL_HELD, SCREEN_NOT_RUNNING, UNSUPPORTED_CAPABILITY, STALE_OBSERVATION, ELEMENT_NOT_FOUND, IDEMPOTENCY_KEY_IN_USE. */
+            409: components["responses"]["Conflict"];
+            /** @description Unsupported media type: UNSUPPORTED_MEDIA_TYPE. */
+            415: components["responses"]["UnsupportedMediaType"];
+            /** @description Unprocessable: IDEMPOTENCY_KEY_REUSED. */
+            422: components["responses"]["Unprocessable"];
+            /** @description Rate limited: RATE_LIMITED. */
+            429: components["responses"]["TooManyRequests"];
+            /** @description Internal error: INTERNAL. */
+            500: components["responses"]["InternalError"];
+            /** @description Screen unavailable: SCREEN_UNAVAILABLE. */
+            503: components["responses"]["Unavailable"];
+            /** @description Outcome unknown: OUTCOME_UNKNOWN. */
+            504: components["responses"]["OutcomeUnknown"];
+        };
+    };
+    runScript: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Any unique string, ideally a UUIDv7; the SDK and MCP always send one. A retry with the same key and body gets the stored answer instead of running twice (kept 24 h for screens and power, 10 minutes for actions and commands). Stored once execution began: 2xx, 500 and 504. Never stored when `outcome` is `not_applied` (400, 401, 403, 404, 409, 415, 422, 429), so the same key can be retried after a conflict or a rate limit. Replays of runActions keep per-action results and shot metadata only, capture a fresh screenshot and carry `Idempotent-Replayed: true`. Same key, different body: 422 IDEMPOTENCY_KEY_REUSED. Same key still running: 409 IDEMPOTENCY_KEY_IN_USE.
+                 * @example 01929f6e-7c1a-7b3e-9d2f-5a8c4e6b1d03
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /**
+                 * @description Optional label that groups calls into one run in the screen's history. It is only a label and never locks the screen. The SDK fills it from KUBI_RUN, else Claude Code's CLAUDE_CODE_SESSION_ID, else one id per client it creates.
+                 * @example 6f1c2a90-3d4b-4e8f-9a1c-7b2d5e8f0a13
+                 */
+                "Kubi-Run"?: components["parameters"]["Run"];
+            };
+            path: {
+                /**
+                 * @description Screen id (`scr_...`).
+                 * @example scr_7f2kq9w3x8m4b6tzp1ac
+                 */
+                screen_id: components["parameters"]["ScreenId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScriptRequest"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Billing-Warning": components["headers"]["BillingWarning"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScriptResult"];
+                };
+            };
+            /** @description Bad request: INVALID_ARGUMENT. */
+            400: components["responses"]["BadRequest"];
+            /** @description Not authenticated: UNAUTHENTICATED. */
+            401: components["responses"]["Unauthorized"];
+            /** @description Not allowed: PERMISSION_DENIED. */
+            403: components["responses"]["Forbidden"];
+            /** @description Not found: SCREEN_NOT_FOUND. */
+            404: components["responses"]["NotFound"];
+            /** @description Conflict with the screen's state: CONTROL_HELD, SCREEN_NOT_RUNNING, UNSUPPORTED_CAPABILITY, STALE_OBSERVATION, IDEMPOTENCY_KEY_IN_USE. */
+            409: components["responses"]["Conflict"];
+            /** @description Unsupported media type: UNSUPPORTED_MEDIA_TYPE. */
+            415: components["responses"]["UnsupportedMediaType"];
+            /** @description Unprocessable: SECRET_BLOCKED, IDEMPOTENCY_KEY_REUSED. */
             422: components["responses"]["Unprocessable"];
             /** @description Rate limited: RATE_LIMITED. */
             429: components["responses"]["TooManyRequests"];
