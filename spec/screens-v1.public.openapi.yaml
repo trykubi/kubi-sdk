@@ -2038,6 +2038,15 @@ paths:
         schema:
           type: boolean
           default: false
+      - name: marks
+        in: query
+        required: false
+        description: 'true: draw the id of each element an agent can act on in the active window on the image, list
+          them in `marks` and bind them to this screenshot_id, so a model can act by `element` without reading the
+          tree. 409 UNSUPPORTED_CAPABILITY on a screen that can''t read trees.'
+        schema:
+          type: boolean
+          default: false
       - $ref: '#/components/parameters/Run'
       responses:
         '200':
@@ -2338,9 +2347,13 @@ paths:
       - name: window
         in: query
         required: false
-        description: 'A window id from the window list. Default: the active window.'
+        description: 'A window id from the window list, or `all` for every open window, topmost first, at most 12,
+          with a header row per window and each element''s `window` set; with `query` it finds an element wherever
+          it is. Default: the active window.'
         schema:
-          $ref: '#/components/schemas/WindowId'
+          type: string
+          maxLength: 12
+          pattern: ^(win_[0-9a-f]{1,8}|all)$
       - name: region
         in: query
         required: false
@@ -4386,6 +4399,329 @@ paths:
           import { Kubi } from "@trykubi/sdk";
           const client = new Kubi(); // reads KUBI_API_KEY
           await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").clipboard.set({ text: "Quarterly report, Q3 2026" });
+  /screens/{screen_id}/apps:
+    get:
+      operationId: listApps
+      summary: List installed apps
+      description: |-
+        Needs the `read` permission. Answers within 5 s.
+
+        The apps installed on the screen, from their desktop entries: an id to `launch` in runActions, the name, what each is for and whether a window of it is open. Terminal emulators say so and launch only with `terminal: true`.
+      tags:
+      - Actions
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ScreenId'
+      - $ref: '#/components/parameters/Run'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Billing-Warning:
+              $ref: '#/components/headers/BillingWarning'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppList'
+              examples:
+                apps:
+                  value:
+                    data:
+                    - id: libreoffice-calc
+                      name: LibreOffice Calc
+                      comment: Perform calculations, analyze information and manage lists in spreadsheets.
+                      categories:
+                      - Office
+                      - Spreadsheet
+                      terminal: false
+                      running: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 'Bad request: INVALID_ARGUMENT.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Not authenticated: UNAUTHENTICATED.'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Not allowed: PERMISSION_DENIED.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 'Not found: SCREEN_NOT_FOUND.'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Conflict with the screen''s state: CONTROL_HELD, SCREEN_NOT_RUNNING, UNSUPPORTED_CAPABILITY.'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: 'Rate limited: RATE_LIMITED.'
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 'Internal error: INTERNAL.'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+          description: 'Screen unavailable: SCREEN_UNAVAILABLE.'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: |-
+          curl 'https://api.trykubi.com/v1/screens/scr_7f2kq9w3x8m4b6tzp1ac/apps' \
+            -H "Authorization: Bearer $KUBI_API_KEY"
+      - lang: TypeScript
+        label: TypeScript SDK
+        source: |-
+          import { Kubi } from "@trykubi/sdk";
+          const client = new Kubi(); // reads KUBI_API_KEY
+          const { data } = await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").apps();
+  /screens/{screen_id}/page:
+    post:
+      operationId: runPage
+      summary: Read or act on a browser tab
+      description: |-
+        Needs the `control` permission. Answers within 10 s.
+
+        A Chromium or Chrome tab as compact rows, each link, button and field with a ref, its text and its value, and `click`, `fill`, `select`, `check`, `press`, `navigate` and `back` by ref, each answering with the page after it. It needs the browser's debugging port inside the screen, which the screen's own Chromium opens; `prepare` says whether it answers and, with `relaunch`, restarts a browser started without it on the same profile. Actions are the browser's own trusted input and count as input: they make older screenshots stale. No caller's script runs in the page.
+      tags:
+      - Actions
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ScreenId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/Run'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageRequest'
+            examples:
+              read:
+                value:
+                  op: read
+              fill:
+                value:
+                  op: fill
+                  ref: r3
+                  value: ana@example.com
+      responses:
+        '200':
+          description: Success.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            Billing-Warning:
+              $ref: '#/components/headers/BillingWarning'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageResult'
+              examples:
+                read:
+                  value:
+                    op: read
+                    ready: true
+                    browser: Chromium
+                    tab:
+                      id: t1
+                      title: Sign up
+                      url: https://example.com/signup
+                      active: true
+                    text: |
+                      [r1] heading "Sign up"
+                      [r2] textbox "Name" = ""
+                      [r3] textbox "Email" = ""
+                      [r4] button "Create account"
+                    refs: 4
+                    truncated: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 'Bad request: INVALID_ARGUMENT.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Not authenticated: UNAUTHENTICATED.'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Not allowed: PERMISSION_DENIED.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 'Not found: SCREEN_NOT_FOUND.'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Conflict with the screen''s state: CONTROL_HELD, SCREEN_NOT_RUNNING, UNSUPPORTED_CAPABILITY,
+            STALE_OBSERVATION, ELEMENT_NOT_FOUND, IDEMPOTENCY_KEY_IN_USE.'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+          description: 'Unsupported media type: UNSUPPORTED_MEDIA_TYPE.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Unprocessable: IDEMPOTENCY_KEY_REUSED.'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: 'Rate limited: RATE_LIMITED.'
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 'Internal error: INTERNAL.'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+          description: 'Screen unavailable: SCREEN_UNAVAILABLE.'
+        '504':
+          $ref: '#/components/responses/OutcomeUnknown'
+          description: 'Outcome unknown: OUTCOME_UNKNOWN.'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: |-
+          curl -X POST 'https://api.trykubi.com/v1/screens/scr_7f2kq9w3x8m4b6tzp1ac/page' \
+            -H "Authorization: Bearer $KUBI_API_KEY" \
+            -H "Idempotency-Key: $(uuidgen)" \
+            -H 'Content-Type: application/json' \
+            -d '{"op": "read"}'
+      - lang: TypeScript
+        label: TypeScript SDK
+        source: |-
+          import { Kubi } from "@trykubi/sdk";
+          const client = new Kubi(); // reads KUBI_API_KEY
+          const page = await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").page({ op: "read" });
+  /screens/{screen_id}/script:
+    post:
+      operationId: runScript
+      summary: Run a GUI script
+      description: |-
+        Needs the `control` permission. Answers within 28 s.
+
+        Runs a short JavaScript program inside the screen that calls only the screen's own GUI functions: `screenshot(opts)`, `tree(q)`, `find(q)` (every window), `act(actions, opts)` (a batch, as runActions), `wait(ms)`, `expect(cond)`, `apps()`, `launch(id)`, `page(req)` and `log(...)`. Loops, branches and read-then-act logic then cost one call. A failed call throws an error with its `code`. There are no files, network, processes or timers. Limits: 32 KiB of code, `timeout_ms` (28 s at most), 200 calls, 64 KiB of log and of result. A script sees a screenshot's id and size, never its pixels; with `screenshot: after` one image comes back. A person taking control stops it at its next call (`stopped`). History keeps each action it ran as its own row.
+      tags:
+      - Actions
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ScreenId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/Run'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScriptRequest'
+            examples:
+              loop:
+                value:
+                  code: |-
+                    const t = find({query: 'Apply'});
+                    for (const e of t.elements) if (e.id) { act([{type: 'click', element: e.id}], {screenshot_id: t.screenshot_id}); return e.name }
+                    return null
+                  screenshot: after
+      responses:
+        '200':
+          description: Success.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            Billing-Warning:
+              $ref: '#/components/headers/BillingWarning'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScriptResult'
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    result: Apply
+                    log: ""
+                    calls:
+                    - index: 0
+                      fn: find
+                      ok: true
+                      summary: 'find Apply: 1 row'
+                      duration_ms: 180
+                    - index: 1
+                      fn: act
+                      ok: true
+                      summary: click e4
+                      duration_ms: 420
+                    screenshot: null
+                    duration_ms: 640
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 'Bad request: INVALID_ARGUMENT.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Not authenticated: UNAUTHENTICATED.'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Not allowed: PERMISSION_DENIED.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 'Not found: SCREEN_NOT_FOUND.'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Conflict with the screen''s state: CONTROL_HELD, SCREEN_NOT_RUNNING, UNSUPPORTED_CAPABILITY,
+            STALE_OBSERVATION, IDEMPOTENCY_KEY_IN_USE.'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+          description: 'Unsupported media type: UNSUPPORTED_MEDIA_TYPE.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Unprocessable: SECRET_BLOCKED, IDEMPOTENCY_KEY_REUSED.'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: 'Rate limited: RATE_LIMITED.'
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 'Internal error: INTERNAL.'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+          description: 'Screen unavailable: SCREEN_UNAVAILABLE.'
+        '504':
+          $ref: '#/components/responses/OutcomeUnknown'
+          description: 'Outcome unknown: OUTCOME_UNKNOWN.'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: |-
+          curl -X POST 'https://api.trykubi.com/v1/screens/scr_7f2kq9w3x8m4b6tzp1ac/script' \
+            -H "Authorization: Bearer $KUBI_API_KEY" \
+            -H "Idempotency-Key: $(uuidgen)" \
+            -H 'Content-Type: application/json' \
+            -d '{"code": "const t = find({query: 'Apply'});\nfor (const e of t.elements) if (e.id) { act([{type: 'click', element: e.id}], {screenshot_id: t.screenshot_id}); return e.name }\nreturn null", "screenshot": "after"}'
+      - lang: TypeScript
+        label: TypeScript SDK
+        source: |-
+          import { Kubi } from "@trykubi/sdk";
+          const client = new Kubi(); // reads KUBI_API_KEY
+          const r = await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").script({ code: "return find({ query: 'Save' }).text" });
   /screens/{screen_id}/viewer:
     post:
       operationId: createViewer
@@ -5798,6 +6134,15 @@ components:
           minimum: 300
           maximum: 2592000
           description: 'Disposable only: delete it this many seconds after it is created. Default: no end time.'
+        desktop:
+          type: string
+          enum:
+          - 1920x1080
+          - 1280x720
+          default: 1920x1080
+          maxLength: 9
+          description: The desktop's size. Screenshots come at 1280x720 either way unless a call asks for `full`.
+            A template's screen keeps the template's size.
       additionalProperties: false
     ScreenUpdate:
       type: object
@@ -6257,6 +6602,13 @@ components:
           maxItems: 50
           description: 'With `windows=true`: the open windows, topmost first, in this screenshot''s pixels (a region''s:
             the full screenshot''s). Normal windows and dialogs only; at most 50.'
+        marks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mark'
+          maxItems: 150
+          description: 'With `marks=true`: the elements whose ids are drawn on the image, bound to this screenshot_id
+            for `element` in runActions.'
     WindowId:
       type: string
       maxLength: 12
@@ -6282,6 +6634,48 @@ components:
           type: string
           maxLength: 100
           description: The app, from the window's class (for example `chromium`, `org.gnome.TextEditor`).
+    Mark:
+      type: object
+      title: Mark
+      description: 'One element marked on a screenshot: its id is drawn in a box at its top left corner.'
+      required:
+      - id
+      - role
+      - name
+      - x
+      - "y"
+      - width
+      - height
+      properties:
+        id:
+          type: string
+          maxLength: 6
+        role:
+          type: string
+          maxLength: 40
+        name:
+          type: string
+          maxLength: 203
+        x:
+          type: integer
+          format: int32
+          minimum: -9999
+          maximum: 9999
+        "y":
+          type: integer
+          format: int32
+          minimum: -9999
+          maximum: 9999
+        width:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
+        height:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
     WindowInfo:
       type: object
       title: WindowInfo
@@ -6330,6 +6724,18 @@ components:
         active:
           type: boolean
           description: true for the window with the keyboard focus.
+        state:
+          anyOf:
+          - type: string
+            enum:
+            - normal
+            - maximized
+            - minimized
+            - fullscreen
+            maxLength: 10
+          - type: string
+            maxLength: 10
+          description: 'minimized: listed so it can be restored with the `window` action; it is never under a point.'
     ScreenshotOptions:
       type: object
       title: ScreenshotOptions
@@ -6405,7 +6811,8 @@ components:
     ActionMove:
       type: object
       title: ActionMove
-      description: Move the pointer (hover), to x and y or to an element.
+      description: Move the pointer (hover), to x and y or to an element. A batch ending in a move settles for at
+        least 700 ms, so a tooltip shows in the after-shot.
       required:
       - type
       properties:
@@ -6419,6 +6826,13 @@ components:
           $ref: '#/components/schemas/Coordinate'
         element:
           $ref: '#/components/schemas/ElementId'
+        dwell_ms:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 5000
+          default: 0
+          description: Rest the pointer this long after it arrives, for hover menus and tooltips.
       additionalProperties: false
     ActionMouseDown:
       type: object
@@ -6740,6 +7154,164 @@ components:
         window:
           $ref: '#/components/schemas/WindowId'
       additionalProperties: false
+    ActionWindow:
+      type: object
+      title: ActionWindow
+      description: Move or resize a window (x, y, width, height in the coordinate space, any of them), or maximize,
+        minimize, restore or close it. A minimized window stays in the window list.
+      required:
+      - type
+      - window
+      properties:
+        type:
+          type: string
+          const: window
+          maxLength: 20
+        window:
+          $ref: '#/components/schemas/WindowId'
+        x:
+          $ref: '#/components/schemas/Coordinate'
+        "y":
+          $ref: '#/components/schemas/Coordinate'
+        width:
+          type: integer
+          format: int32
+          minimum: 50
+          maximum: 9999
+        height:
+          type: integer
+          format: int32
+          minimum: 50
+          maximum: 9999
+        state:
+          type: string
+          enum:
+          - maximize
+          - minimize
+          - restore
+          - close
+          maxLength: 8
+      additionalProperties: false
+    ActionSelect:
+      type: object
+      title: ActionSelect
+      description: Pick an option of a dropdown, combo box or list by its text, then read the choice back in `value`.
+      required:
+      - type
+      - element
+      - option
+      properties:
+        type:
+          type: string
+          const: select
+          maxLength: 20
+        element:
+          $ref: '#/components/schemas/ElementId'
+        option:
+          type: string
+          maxLength: 200
+          minLength: 1
+          description: 'The option''s text: matched exactly, then ignoring case, then as a part.'
+      additionalProperties: false
+    ActionCheck:
+      type: object
+      title: ActionCheck
+      description: Make a check box, switch or toggle checked. Nothing happens when it already is; the result says
+        `checked`.
+      required:
+      - type
+      - element
+      properties:
+        type:
+          type: string
+          const: check
+          maxLength: 20
+        element:
+          $ref: '#/components/schemas/ElementId'
+      additionalProperties: false
+    ActionUncheck:
+      type: object
+      title: ActionUncheck
+      description: Make a check box, switch or toggle unchecked, as check does.
+      required:
+      - type
+      - element
+      properties:
+        type:
+          type: string
+          const: uncheck
+          maxLength: 20
+        element:
+          $ref: '#/components/schemas/ElementId'
+      additionalProperties: false
+    ActionExpand:
+      type: object
+      title: ActionExpand
+      description: Open a tree row, group or menu. Nothing happens when it already is open; the result says `expanded`.
+      required:
+      - type
+      - element
+      properties:
+        type:
+          type: string
+          const: expand
+          maxLength: 20
+        element:
+          $ref: '#/components/schemas/ElementId'
+      additionalProperties: false
+    ActionCollapse:
+      type: object
+      title: ActionCollapse
+      description: Close a tree row, group or menu.
+      required:
+      - type
+      - element
+      properties:
+        type:
+          type: string
+          const: collapse
+          maxLength: 20
+        element:
+          $ref: '#/components/schemas/ElementId'
+      additionalProperties: false
+    ActionScrollTo:
+      type: object
+      title: ActionScrollTo
+      description: Scroll an element into view in its window.
+      required:
+      - type
+      - element
+      properties:
+        type:
+          type: string
+          const: scroll_to
+          maxLength: 20
+        element:
+          $ref: '#/components/schemas/ElementId'
+      additionalProperties: false
+    ActionLaunch:
+      type: object
+      title: ActionLaunch
+      description: 'Start an installed app by its id and wait up to 10 s for its window, then bring it to the front.
+        The result names the window in `window`; `tree: after` reads it.'
+      required:
+      - type
+      - app
+      properties:
+        type:
+          type: string
+          const: launch
+          maxLength: 20
+        app:
+          type: string
+          maxLength: 200
+          pattern: ^[A-Za-z0-9._+-]{1,200}$
+          description: An app id from listApps.
+        terminal:
+          type: boolean
+          default: false
+          description: Required to launch a terminal emulator.
+      additionalProperties: false
     ActionScreenshot:
       type: object
       title: ActionScreenshot
@@ -6798,7 +7370,7 @@ components:
       additionalProperties: false
     Action:
       title: Action
-      description: One input step, picked by `type` (18 types). Covers Anthropic's 17 computer tools, OpenAI's computer
+      description: One input step, picked by `type` (26 types). Covers Anthropic's 17 computer tools, OpenAI's computer
         actions and Gemini's desktop actions; the docs' model guide maps each one.
       oneOf:
       - $ref: '#/components/schemas/ActionClick'
@@ -6817,6 +7389,14 @@ components:
       - $ref: '#/components/schemas/ActionSetValue'
       - $ref: '#/components/schemas/ActionInvoke'
       - $ref: '#/components/schemas/ActionFocus'
+      - $ref: '#/components/schemas/ActionWindow'
+      - $ref: '#/components/schemas/ActionSelect'
+      - $ref: '#/components/schemas/ActionCheck'
+      - $ref: '#/components/schemas/ActionUncheck'
+      - $ref: '#/components/schemas/ActionExpand'
+      - $ref: '#/components/schemas/ActionCollapse'
+      - $ref: '#/components/schemas/ActionScrollTo'
+      - $ref: '#/components/schemas/ActionLaunch'
       - $ref: '#/components/schemas/ActionScreenshot'
       - $ref: '#/components/schemas/ActionZoom'
       discriminator:
@@ -6838,6 +7418,14 @@ components:
           set_value: '#/components/schemas/ActionSetValue'
           invoke: '#/components/schemas/ActionInvoke'
           focus: '#/components/schemas/ActionFocus'
+          window: '#/components/schemas/ActionWindow'
+          select: '#/components/schemas/ActionSelect'
+          check: '#/components/schemas/ActionCheck'
+          uncheck: '#/components/schemas/ActionUncheck'
+          expand: '#/components/schemas/ActionExpand'
+          collapse: '#/components/schemas/ActionCollapse'
+          scroll_to: '#/components/schemas/ActionScrollTo'
+          launch: '#/components/schemas/ActionLaunch'
           screenshot: '#/components/schemas/ActionScreenshot'
           zoom: '#/components/schemas/ActionZoom'
     TreeElement:
@@ -6956,6 +7544,9 @@ components:
           type: string
           maxLength: 120
           description: 'For a control with no name: which of its kind it is.'
+        window:
+          $ref: '#/components/schemas/WindowId'
+          description: 'With `window=all`: the window the element is in.'
     AccessibilityTree:
       type: object
       title: AccessibilityTree
@@ -7280,12 +7871,28 @@ components:
           oneOf:
           - type: string
             maxLength: 503
-            description: 'set_value: the value read back; null when it can''t be read.'
+            description: 'set_value and select: the value read back; null when it can''t be read.'
           - type: "null"
         invoked:
           type: string
           maxLength: 40
           description: 'invoke: the action run.'
+        checked:
+          type: boolean
+          description: 'check and uncheck: the state read back.'
+        expanded:
+          type: boolean
+          description: 'expand and collapse: the state read back.'
+        app:
+          type: string
+          maxLength: 200
+          description: 'launch: the app started.'
+        pid:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 4194304
+          description: 'launch: its process id.'
         duration_ms:
           type: integer
           format: int32
@@ -7551,6 +8158,283 @@ components:
           type: string
           format: date-time
           maxLength: 40
+    App:
+      type: object
+      title: App
+      description: One installed app, from its desktop entry.
+      required:
+      - id
+      - name
+      - categories
+      - terminal
+      - running
+      properties:
+        id:
+          type: string
+          maxLength: 200
+          description: Send it as `app` in a `launch` action.
+        name:
+          type: string
+          maxLength: 200
+        comment:
+          type: string
+          maxLength: 300
+          description: What the app is for.
+        categories:
+          type: array
+          items:
+            type: string
+            maxLength: 60
+          maxItems: 20
+        terminal:
+          type: boolean
+          description: 'A terminal emulator: launch needs `terminal: true`.'
+        running:
+          type: boolean
+          description: A window of it is open.
+    AppList:
+      type: object
+      title: AppList
+      required:
+      - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/App'
+          maxItems: 500
+    PageRequest:
+      type: object
+      title: PageRequest
+      required:
+      - op
+      properties:
+        op:
+          type: string
+          enum:
+          - prepare
+          - read
+          - click
+          - fill
+          - select
+          - check
+          - press
+          - navigate
+          - back
+          maxLength: 8
+          description: 'prepare: say whether the browser can be read (and with `relaunch`, restart it so it can).
+            read: the tab as rows. The rest act on a `ref` from the last read, or on the tab, then answer with the
+            page after.'
+        ref:
+          type: string
+          maxLength: 12
+          pattern: ^r[0-9]{1,5}$
+          description: A ref from the last read of this tab.
+        value:
+          type: string
+          maxLength: 10000
+          description: 'fill: the text. select: the option''s text or value. check: `true` or `false`.'
+        keys:
+          type: string
+          maxLength: 100
+          pattern: ^[A-Za-z0-9_+ -]{1,100}$
+          description: 'press: a key or chord, as in `key`.'
+        url:
+          type: string
+          maxLength: 2000
+          pattern: '^(https?|file|about):'
+          description: 'navigate: where to go.'
+        query:
+          type: string
+          maxLength: 200
+          description: 'read: keep the rows that contain this (any of `a|b`).'
+        tab:
+          type: string
+          maxLength: 64
+          description: 'A tab id from the last answer''s `tabs`. Default: the tab in the active window.'
+        relaunch:
+          type: boolean
+          default: false
+          description: 'prepare: when the browser has no debugging port, close it and start it again on the same
+            profile with the port open. Its open tabs are restored only as the browser restores them.'
+        read_after:
+          type: boolean
+          default: true
+          description: 'Actions: answer with the rows after.'
+      additionalProperties: false
+    PageTab:
+      type: object
+      title: PageTab
+      required:
+      - id
+      - title
+      - url
+      - active
+      properties:
+        id:
+          type: string
+          maxLength: 64
+        title:
+          type: string
+          maxLength: 200
+        url:
+          type: string
+          maxLength: 2000
+        active:
+          type: boolean
+    PageResult:
+      type: object
+      title: PageResult
+      required:
+      - op
+      - ready
+      properties:
+        op:
+          type: string
+          maxLength: 10
+        ready:
+          type: boolean
+          description: The browser's debugging port answers.
+        browser:
+          oneOf:
+          - type: string
+            maxLength: 100
+          - type: "null"
+        tab:
+          oneOf:
+          - $ref: '#/components/schemas/PageTab'
+          - type: "null"
+        tabs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageTab'
+          maxItems: 50
+        text:
+          type: string
+          maxLength: 40000
+          description: 'The page as rows: `[r12] button "Save"`, a field with its value (`[r3] textbox "Email" =
+            "ana@example.com"`), cut at 8,000 characters for read and 4,000 after an action. Never a password''s
+            value.'
+        refs:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100000
+          description: How many refs the read gave.
+        truncated:
+          type: boolean
+        navigated:
+          type: boolean
+          description: 'Actions: the URL changed.'
+        note:
+          type: string
+          maxLength: 300
+          description: 'prepare: what to do when the browser can''t be read.'
+    ScriptRequest:
+      type: object
+      title: ScriptRequest
+      required:
+      - code
+      properties:
+        code:
+          type: string
+          maxLength: 32768
+          minLength: 1
+          description: 'JavaScript (ES2020) run as a function body; `return` gives `result`. Calls: screenshot(opts),
+            tree(q), find(q), act(actions, opts), wait(ms), expect(cond), apps(), launch(id), page(req), log(...).'
+        screenshot:
+          type: string
+          enum:
+          - after
+          - none
+          default: none
+          maxLength: 5
+          description: 'after: attach the screen after the script, once it settles.'
+        screenshot_options:
+          $ref: '#/components/schemas/ScreenshotOptions'
+        timeout_ms:
+          type: integer
+          format: int32
+          minimum: 100
+          maximum: 28000
+          default: 28000
+      additionalProperties: false
+    ScriptCall:
+      type: object
+      title: ScriptCall
+      description: One call the script made, in order.
+      required:
+      - index
+      - fn
+      - ok
+      - duration_ms
+      properties:
+        index:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 199
+        fn:
+          type: string
+          maxLength: 20
+        ok:
+          type: boolean
+        code:
+          type: string
+          maxLength: 63
+          description: The error code when it failed.
+        summary:
+          type: string
+          maxLength: 300
+        duration_ms:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 30000
+    ScriptResult:
+      type: object
+      title: ScriptResult
+      required:
+      - status
+      - log
+      - calls
+      - duration_ms
+      properties:
+        status:
+          anyOf:
+          - type: string
+            enum:
+            - ok
+            - error
+            - timeout
+            - stopped
+            maxLength: 10
+          - type: string
+            maxLength: 10
+          description: 'error: the script threw (see `error`). timeout: it ran past timeout_ms. stopped: a person
+            took control (`error` is CONTROL_HELD).'
+        result:
+          description: What the script returned, as JSON, at most 64 KiB.
+        log:
+          type: string
+          maxLength: 65536
+          description: What log() wrote, cut at 64 KiB.
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+        calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScriptCall'
+          maxItems: 200
+        screenshot:
+          oneOf:
+          - $ref: '#/components/schemas/Screenshot'
+          - type: "null"
+        duration_ms:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 30000
     Clipboard:
       type: object
       title: Clipboard
@@ -8293,6 +9177,13 @@ components:
           $ref: '#/components/schemas/Coordinate'
         element:
           $ref: '#/components/schemas/ElementId'
+        dwell_ms:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 5000
+          default: 0
+          description: Rest the pointer this long after it arrives, for hover menus and tooltips.
         screenshot_id:
           type: string
           maxLength: 25

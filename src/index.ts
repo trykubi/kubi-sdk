@@ -362,6 +362,24 @@ export class ScreenClient {
     return unwrap(this.raw.GET('/screens/{screen_id}/accessibility', { params: { path: this.path, query } }))
   }
 
+  /** The apps installed on the screen, with the ids a `launch` action takes. */
+  apps() {
+    return unwrap(this.raw.GET('/screens/{screen_id}/apps', { params: { path: this.path } }))
+  }
+
+  /** A browser tab read as rows with refs, or acted on by ref (click, fill, select, check, press, navigate, back). */
+  page(body: Schemas['PageRequest']) {
+    return unwrap(this.raw.POST('/screens/{screen_id}/page', { params: { path: this.path }, body }))
+  }
+
+  /**
+   * Runs a short JavaScript program inside the screen that calls only its GUI functions (screenshot, tree, find,
+   * act, wait, expect, apps, launch, page, log), at most 28 s. Never retried: a script runs again on a resend.
+   */
+  script(body: Schemas['ScriptRequest']) {
+    return unwrap(this.raw.POST('/screens/{screen_id}/script', { params: { path: this.path }, body }))
+  }
+
   /** A batch of 1 to 20 actions, 100 ms apart, stopping at the first failure. */
   act(actions: Action[], opts: ActOptions = {}) {
     return unwrap(
