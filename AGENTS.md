@@ -5,4 +5,6 @@
 - Types only from the public spec through `scripts/gen.sh`; never edit `spec/` or `src/types.gen.ts`.
 - Never retry a call the API doesn't mark `retryable`, and never a 504. A resend keeps its `Idempotency-Key`.
 - No telemetry, no install scripts.
-- `./check.sh` passes before every commit. Commit after each change, saying what and why.
+- Commit after each change, saying what and why. Changes reach `main` through a pull request, never a direct push:
+  `gh pr checks --watch` until GitHub's `check` (`./check.sh` on a fresh copy) passes, then
+  `gh pr merge --rebase --delete-branch`. Checks run only on GitHub, never on the laptop.
