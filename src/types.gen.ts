@@ -1309,6 +1309,7 @@ export interface components {
             resources: components["schemas"]["Resources"];
             /** @description true: a screen started from it comes back with the open windows it was saved with. false: it boots from the saved disk. */
             with_memory: boolean;
+            failure_reason?: string | null;
             size_bytes?: number | null;
             /**
              * Format: int32

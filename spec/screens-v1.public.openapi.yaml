@@ -6257,6 +6257,12 @@ components:
           type: boolean
           description: 'true: a screen started from it comes back with the open windows it was saved with. false:
             it boots from the saved disk.'
+        failure_reason:
+          oneOf:
+          - type: string
+            maxLength: 200
+            description: 'failed: why, in a sentence. null otherwise.'
+          - type: "null"
         size_bytes:
           oneOf:
           - type: integer
