@@ -721,7 +721,7 @@ export interface paths {
          * List installed apps
          * @description Needs the `read` permission. Answers within 5 s.
          *
-         *     The apps installed on the screen, from their desktop entries: an id to `launch` in runActions, the name, what each is for and whether a window of it is open. Terminal emulators say so and launch only with `terminal: true`.
+         *     The apps installed on the screen, from their desktop entries: an id to `launch` in runActions, the name, what each is for and whether a window of it is open. Terminal emulators say so.
          */
         get: operations["listApps"];
         put?: never;
@@ -1882,7 +1882,7 @@ export interface components {
         };
         /**
          * ActionLaunch
-         * @description Start an installed app by its id and wait up to 10 s for its window, then bring it to the front. The result names the window in `window`; `tree: after` reads it.
+         * @description Start an installed app by its id or name and wait up to 10 s for its window, then bring it to the front. The result names the window in `window`; `tree: after` reads it.
          */
         ActionLaunch: {
             /**
@@ -1890,10 +1890,10 @@ export interface components {
              * @enum {string}
              */
             type: "launch";
-            /** @description An app id from listApps. */
+            /** @description An app id from listApps, or its name: `calc` or `terminal` starts the one app whose id or name holds it. */
             app: string;
             /**
-             * @description Required to launch a terminal emulator.
+             * @description Accepted and not needed: terminal emulators launch like any app.
              * @default false
              */
             terminal?: boolean;
@@ -2048,7 +2048,7 @@ export interface components {
         };
         /**
          * Expect
-         * @description Checked after the batch, every 100 ms until two reads agree.
+         * @description Checked after the batch, every 100 ms until two reads agree. A batch that stopped at a failure is looked at once and answers `unknown`.
          */
         Expect: {
             /** @description All must hold. */
@@ -2247,7 +2247,7 @@ export interface components {
             /** @description What the app is for. */
             comment?: string;
             categories: string[];
-            /** @description A terminal emulator: launch needs `terminal: true`. */
+            /** @description A terminal emulator. */
             terminal: boolean;
             /** @description A window of it is open. */
             running: boolean;
@@ -4335,7 +4335,7 @@ export interface operations {
                 region?: string;
                 /** @description Bind the ids to this screenshot and give places in its pixels. 409 STALE_OBSERVATION if input ran since. */
                 screenshot_id?: string;
-                /** @description Keep the elements whose role, name or value contains this (any of `a|b`), with their parents; ids stay the same. */
+                /** @description Keep the elements whose role, name, description, value or option texts contain this (any of `a|b`), with their parents; ids stay the same. */
                 query?: string;
                 /** @description Actionable elements at most. */
                 max_elements?: number;

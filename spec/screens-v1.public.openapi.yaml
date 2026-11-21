@@ -2375,8 +2375,8 @@ paths:
       - name: query
         in: query
         required: false
-        description: Keep the elements whose role, name or value contains this (any of `a|b`), with their parents;
-          ids stay the same.
+        description: Keep the elements whose role, name, description, value or option texts contain this (any of
+          `a|b`), with their parents; ids stay the same.
         schema:
           type: string
           maxLength: 200
@@ -4406,7 +4406,7 @@ paths:
       description: |-
         Needs the `read` permission. Answers within 5 s.
 
-        The apps installed on the screen, from their desktop entries: an id to `launch` in runActions, the name, what each is for and whether a window of it is open. Terminal emulators say so and launch only with `terminal: true`.
+        The apps installed on the screen, from their desktop entries: an id to `launch` in runActions, the name, what each is for and whether a window of it is open. Terminal emulators say so.
       tags:
       - Actions
       security:
@@ -7292,8 +7292,8 @@ components:
     ActionLaunch:
       type: object
       title: ActionLaunch
-      description: 'Start an installed app by its id and wait up to 10 s for its window, then bring it to the front.
-        The result names the window in `window`; `tree: after` reads it.'
+      description: 'Start an installed app by its id or name and wait up to 10 s for its window, then bring it to
+        the front. The result names the window in `window`; `tree: after` reads it.'
       required:
       - type
       - app
@@ -7305,12 +7305,13 @@ components:
         app:
           type: string
           maxLength: 200
-          pattern: ^[A-Za-z0-9._+-]{1,200}$
-          description: An app id from listApps.
+          pattern: ^[A-Za-z0-9._+ -]{1,200}$
+          description: 'An app id from listApps, or its name: `calc` or `terminal` starts the one app whose id or
+            name holds it.'
         terminal:
           type: boolean
           default: false
-          description: Required to launch a terminal emulator.
+          description: 'Accepted and not needed: terminal emulators launch like any app.'
       additionalProperties: false
     ActionScreenshot:
       type: object
@@ -7690,7 +7691,8 @@ components:
     Expect:
       type: object
       title: Expect
-      description: Checked after the batch, every 100 ms until two reads agree.
+      description: Checked after the batch, every 100 ms until two reads agree. A batch that stopped at a failure
+        is looked at once and answers `unknown`.
       required:
       - conditions
       properties:
@@ -8188,7 +8190,7 @@ components:
           maxItems: 20
         terminal:
           type: boolean
-          description: 'A terminal emulator: launch needs `terminal: true`.'
+          description: A terminal emulator.
         running:
           type: boolean
           description: A window of it is open.
