@@ -1642,7 +1642,8 @@ export interface components {
             enter?: boolean;
             /**
              * Format: int32
-             * @default 12
+             * @description Pause after each key. 0 sends them as fast as the app takes them; 10 to 50 for a search box that reacts to each key.
+             * @default 0
              */
             delay_ms?: number;
             /**
@@ -2031,7 +2032,7 @@ export interface components {
         };
         /**
          * Condition
-         * @description One check: on an element (`element` plus one or more of the rest) or on the active window (`window_title`).
+         * @description One check: on an element (`element` plus one or more of the rest), on the active window (`window_title`), or on text in it (`text`).
          */
         Condition: {
             element?: components["schemas"]["ElementId"];
@@ -2045,6 +2046,10 @@ export interface components {
             selected?: boolean;
             checked?: boolean;
             focused?: boolean;
+            /** @description Text anywhere in the active window's tree: an element's name, value or description holds it, in any case. */
+            text?: string;
+            /** @description With `text`: holds once the text is absent. */
+            gone?: boolean;
         };
         /**
          * Expect
@@ -2088,7 +2093,7 @@ export interface components {
             screenshot?: "after" | "if_changed" | "none";
             screenshot_options?: components["schemas"]["ScreenshotOptions"];
             /**
-             * @description after: attach an accessibility tree after the batch, bound to the after-screenshot's id (or a new one), so its ids are ready for the next call. It reads the window of the last action by element while that window is open, else the active window.
+             * @description after: attach an accessibility tree after the batch, bound to the after-screenshot's id (or a new one), so its ids are ready for the next call. It reads the window of the last action by element while that window is open, else the active window. Unsent: a batch that opens a dialog in an app already open (Save, Open) attaches that dialog's tree, 80 elements at most; `none` turns that off.
              * @default none
              * @enum {string}
              */
@@ -2578,7 +2583,8 @@ export interface components {
             enter?: boolean;
             /**
              * Format: int32
-             * @default 12
+             * @description Pause after each key. 0 sends them as fast as the app takes them; 10 to 50 for a search box that reacts to each key.
+             * @default 0
              */
             delay_ms?: number;
             /**
