@@ -6962,7 +6962,9 @@ components:
           format: int32
           minimum: 0
           maximum: 100
-          default: 12
+          default: 0
+          description: Pause after each key. 0 sends them as fast as the app takes them; 10 to 50 for a search box
+            that reacts to each key.
         via:
           type: string
           enum:
@@ -7661,7 +7663,8 @@ components:
     Condition:
       type: object
       title: Condition
-      description: 'One check: on an element (`element` plus one or more of the rest) or on the active window (`window_title`).'
+      description: 'One check: on an element (`element` plus one or more of the rest), on the active window (`window_title`),
+        or on text in it (`text`).'
       properties:
         element:
           $ref: '#/components/schemas/ElementId'
@@ -7687,6 +7690,14 @@ components:
           type: boolean
         focused:
           type: boolean
+        text:
+          type: string
+          maxLength: 200
+          description: 'Text anywhere in the active window''s tree: an element''s name, value or description holds
+            it, in any case.'
+        gone:
+          type: boolean
+          description: 'With `text`: holds once the text is absent.'
       additionalProperties: false
     Expect:
       type: object
@@ -7813,7 +7824,8 @@ components:
           maxLength: 5
           description: 'after: attach an accessibility tree after the batch, bound to the after-screenshot''s id
             (or a new one), so its ids are ready for the next call. It reads the window of the last action by element
-            while that window is open, else the active window.'
+            while that window is open, else the active window. Unsent: a batch that opens a dialog in an app already
+            open (Save, Open) attaches that dialog''s tree, 80 elements at most; `none` turns that off.'
         tree_options:
           $ref: '#/components/schemas/TreeOptions'
         expect:
@@ -8991,7 +9003,9 @@ components:
           format: int32
           minimum: 0
           maximum: 100
-          default: 12
+          default: 0
+          description: Pause after each key. 0 sends them as fast as the app takes them; 10 to 50 for a search box
+            that reacts to each key.
         via:
           type: string
           enum:
