@@ -19,7 +19,7 @@ export type ApiError = Schemas['Error']
 /** The query parameters of one operation in the spec. */
 export type Query<K extends keyof operations> = NonNullable<operations[K]['parameters']['query']>
 
-export const VERSION = '1.0.0'
+export const VERSION = '1.1.0'
 const DEFAULT_BASE_URL = 'https://api.trykubi.com/v1'
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 /** A retry the API asks to come back later than this is handed to the caller instead of waited for. */
