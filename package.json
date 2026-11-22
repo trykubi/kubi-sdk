@@ -1,6 +1,6 @@
 {
   "name": "@trykubi/sdk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "TypeScript SDK for Kubi: cloud desktops for AI agents",
   "license": "Apache-2.0",
   "homepage": "https://docs.trykubi.com",
