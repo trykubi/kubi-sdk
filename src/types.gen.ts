@@ -892,6 +892,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/screens/{screen_id}/ports/{port}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a port
+         * @description Needs the `network` permission. Answers within 2 s.
+         *
+         *     One open port, with its URL and token.
+         */
+        get: operations["getPort"];
+        /**
+         * Open a port
+         * @description Needs the `network` permission. Answers within 5 s.
+         *
+         *     Gives the service listening on this port inside the screen its own HTTPS URL, for HTTP and WebSocket requests: a dev server, an app's API, a coding agent's server. At most 3 ports per screen, included in the price. With `token` access (the default) every request carries the returned token in `Kubi-Port-Token`; your own `Authorization` header passes through to the service. With `link` access the URL alone gets in. The port stays open across stop and start, and closes with the screen. Opening a port that is already open with the same access returns it unchanged (200); with the other access it is refused, so close it first. Raw TCP (SSH, databases) is not carried.
+         */
+        put: operations["openPort"];
+        post?: never;
+        /**
+         * Close a port
+         * @description Needs the `network` permission. Answers within 2 s.
+         *
+         *     The URL stops answering, and connections open through it end within 3 seconds. Open it again for a new URL and token.
+         */
+        delete: operations["closePort"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{screen_id}/ports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List open ports
+         * @description Needs the `network` permission. Answers within 2 s.
+         *
+         *     The screen's open ports with their URLs and tokens.
+         */
+        get: operations["listPorts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/secrets": {
         parameters: {
             query?: never;
@@ -926,7 +982,7 @@ export interface components {
          *     - `COORDINATE_OUT_OF_RANGE` (400): A point lies outside the coordinate space; it is rejected, never clamped. Use a point inside details.space.
          *     - `BATCH_TOO_LONG` (400): The batch would run past 28 s, inside the 30 s call limit. Split it into smaller batches.
          *     - `UNAUTHENTICATED` (401): The credential is missing, malformed, unknown, revoked or expired (details.reason). Send a valid key or token.
-         *     - `QUOTA_EXCEEDED` (402): The organization is at its screen cap (details.screen_cap). Delete a screen, or a person asks support for a higher cap.
+         *     - `QUOTA_EXCEEDED` (402): The organization is at its screen cap (details.screen_cap), or the screen at its port cap (details.port_cap). Delete a screen or close a port, or a person asks support for a higher cap.
          *     - `PAYMENT_REQUIRED` (402): Payment failed. A person pays at details.pay_url.
          *     - `CREDIT_EXHAUSTED` (402): The usage credit that pays for disposable screens is used up (details.balance_usd). A person tops up at details.billing_url, or create a persistent screen.
          *     - `SUBSCRIPTION_REQUIRED` (402): Buying usage credit needs a paid persistent screen first. A person subscribes at details.billing_url.
@@ -1055,10 +1111,10 @@ export interface components {
         };
         /**
          * Permission
-         * @description read: see screens, screenshots and history. control: act on the GUI. exec: run commands, read, write and list files. power: create, start, stop, restart (and, for API keys, delete). Same names as OAuth scopes.
+         * @description read: see screens, screenshots and history. control: act on the GUI. exec: run commands, read, write and list files. power: create, start, stop, restart (and, for API keys, delete). network: open, read and close a screen's ports; off unless ticked on the key. The first four are also the OAuth scopes; MCP clients can't have network.
          * @enum {string}
          */
-        Permission: "read" | "control" | "exec" | "power";
+        Permission: "read" | "control" | "exec" | "power" | "network";
         /**
          * Coordinate
          * Format: int32
@@ -2534,6 +2590,44 @@ export interface components {
             };
         };
         /**
+         * Port
+         * @description An open port: HTTP and WebSocket requests to `url` reach the service listening on this port inside the screen, on 127.0.0.1 or 0.0.0.0, with the request's Host kept and `X-Forwarded-Proto: https` set. Answers the port relay gives itself, in the error shape: 401 UNAUTHENTICATED (no token or a wrong one), 403 ORGANIZATION_SUSPENDED, 404 NOT_FOUND, 409 SCREEN_NOT_RUNNING, 429 RATE_LIMITED, 502 PORT_NOT_LISTENING (nothing listens on the port), 503 SCREEN_UNAVAILABLE. Every other answer is the service's.
+         */
+        Port: {
+            /**
+             * Format: int32
+             * @description The TCP port inside the screen.
+             */
+            port: number;
+            /**
+             * @description token: every request must carry the token in `Kubi-Port-Token`. link: the URL alone gets in, for apps that can't add a header; anyone holding it reaches the service.
+             * @enum {string}
+             */
+            access: "token" | "link";
+            /**
+             * Format: uri
+             * @description The port's own HTTPS origin. Keep it secret with `link` access.
+             */
+            url: string;
+            token: string | null;
+            screen_id: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** PortList */
+        PortList: {
+            data: components["schemas"]["Port"][];
+            next: string | null;
+        };
+        /** PortOpen */
+        PortOpen: {
+            /**
+             * @default token
+             * @enum {string}
+             */
+            access?: "token" | "link";
+        };
+        /**
          * Secret
          * @description Name and screens only: the value is never shown.
          */
@@ -2880,6 +2974,11 @@ export interface components {
         Limit: number;
         /** @description Opaque cursor from the previous page's `next`. */
         After: string;
+        /**
+         * @description A TCP port inside the screen, 1 to 65535.
+         * @example 3773
+         */
+        Port: number;
         /** @description Long poll: hold the reply up to this many seconds until something changes. 0 answers at once. Capped at 25 so every call ends within 30 s. */
         WaitS: number;
         /**
@@ -3071,6 +3170,9 @@ export type Actor = components['schemas']['Actor'];
 export type HistoryEntry = components['schemas']['HistoryEntry'];
 export type HistoryList = components['schemas']['HistoryList'];
 export type Me = components['schemas']['Me'];
+export type Port = components['schemas']['Port'];
+export type PortList = components['schemas']['PortList'];
+export type PortOpen = components['schemas']['PortOpen'];
 export type Secret = components['schemas']['Secret'];
 export type SecretList = components['schemas']['SecretList'];
 export type ClickRequest = components['schemas']['ClickRequest'];
@@ -3095,6 +3197,7 @@ export type ResponseOutcomeUnknown = components['responses']['OutcomeUnknown'];
 export type ParameterIdempotencyKey = components['parameters']['IdempotencyKey'];
 export type ParameterLimit = components['parameters']['Limit'];
 export type ParameterAfter = components['parameters']['After'];
+export type ParameterPort = components['parameters']['Port'];
 export type ParameterWaitS = components['parameters']['WaitS'];
 export type ParameterScreenId = components['parameters']['ScreenId'];
 export type ParameterOperationId = components['parameters']['OperationId'];
@@ -5929,6 +6032,242 @@ export interface operations {
             };
             /** @description Bad request: INVALID_ARGUMENT. */
             400: components["responses"]["BadRequest"];
+            /** @description Rate limited: RATE_LIMITED. */
+            429: components["responses"]["TooManyRequests"];
+            /** @description Internal error: INTERNAL. */
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getPort: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional label that groups calls into one run in the screen's history. It is only a label and never locks the screen. The SDK fills it from KUBI_RUN, else Claude Code's CLAUDE_CODE_SESSION_ID, else one id per client it creates.
+                 * @example 6f1c2a90-3d4b-4e8f-9a1c-7b2d5e8f0a13
+                 */
+                "Kubi-Run"?: components["parameters"]["Run"];
+            };
+            path: {
+                /**
+                 * @description Screen id (`scr_...`).
+                 * @example scr_7f2kq9w3x8m4b6tzp1ac
+                 */
+                screen_id: components["parameters"]["ScreenId"];
+                /**
+                 * @description A TCP port inside the screen, 1 to 65535.
+                 * @example 3773
+                 */
+                port: components["parameters"]["Port"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    "Billing-Warning": components["headers"]["BillingWarning"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Port"];
+                };
+            };
+            /** @description Bad request: INVALID_ARGUMENT. */
+            400: components["responses"]["BadRequest"];
+            /** @description Not authenticated: UNAUTHENTICATED. */
+            401: components["responses"]["Unauthorized"];
+            /** @description Not allowed: PERMISSION_DENIED. */
+            403: components["responses"]["Forbidden"];
+            /** @description Not found: SCREEN_NOT_FOUND, NOT_FOUND. */
+            404: components["responses"]["NotFound"];
+            /** @description Rate limited: RATE_LIMITED. */
+            429: components["responses"]["TooManyRequests"];
+            /** @description Internal error: INTERNAL. */
+            500: components["responses"]["InternalError"];
+        };
+    };
+    openPort: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional label that groups calls into one run in the screen's history. It is only a label and never locks the screen. The SDK fills it from KUBI_RUN, else Claude Code's CLAUDE_CODE_SESSION_ID, else one id per client it creates.
+                 * @example 6f1c2a90-3d4b-4e8f-9a1c-7b2d5e8f0a13
+                 */
+                "Kubi-Run"?: components["parameters"]["Run"];
+            };
+            path: {
+                /**
+                 * @description Screen id (`scr_...`).
+                 * @example scr_7f2kq9w3x8m4b6tzp1ac
+                 */
+                screen_id: components["parameters"]["ScreenId"];
+                /**
+                 * @description A TCP port inside the screen, 1 to 65535.
+                 * @example 3773
+                 */
+                port: components["parameters"]["Port"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PortOpen"];
+            };
+        };
+        responses: {
+            /** @description Already open with this access. */
+            200: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    "Billing-Warning": components["headers"]["BillingWarning"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Port"];
+                };
+            };
+            /** @description Opened. */
+            201: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    "Billing-Warning": components["headers"]["BillingWarning"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Port"];
+                };
+            };
+            /** @description Bad request: INVALID_ARGUMENT. */
+            400: components["responses"]["BadRequest"];
+            /** @description Not authenticated: UNAUTHENTICATED. */
+            401: components["responses"]["Unauthorized"];
+            /** @description Payment needed: QUOTA_EXCEEDED. */
+            402: components["responses"]["PaymentRequired"];
+            /** @description Not allowed: PERMISSION_DENIED. */
+            403: components["responses"]["Forbidden"];
+            /** @description Not found: SCREEN_NOT_FOUND. */
+            404: components["responses"]["NotFound"];
+            /** @description Unsupported media type: UNSUPPORTED_MEDIA_TYPE. */
+            415: components["responses"]["UnsupportedMediaType"];
+            /** @description Rate limited: RATE_LIMITED. */
+            429: components["responses"]["TooManyRequests"];
+            /** @description Internal error: INTERNAL. */
+            500: components["responses"]["InternalError"];
+        };
+    };
+    closePort: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional label that groups calls into one run in the screen's history. It is only a label and never locks the screen. The SDK fills it from KUBI_RUN, else Claude Code's CLAUDE_CODE_SESSION_ID, else one id per client it creates.
+                 * @example 6f1c2a90-3d4b-4e8f-9a1c-7b2d5e8f0a13
+                 */
+                "Kubi-Run"?: components["parameters"]["Run"];
+            };
+            path: {
+                /**
+                 * @description Screen id (`scr_...`).
+                 * @example scr_7f2kq9w3x8m4b6tzp1ac
+                 */
+                screen_id: components["parameters"]["ScreenId"];
+                /**
+                 * @description A TCP port inside the screen, 1 to 65535.
+                 * @example 3773
+                 */
+                port: components["parameters"]["Port"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed. */
+            204: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    "Billing-Warning": components["headers"]["BillingWarning"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request: INVALID_ARGUMENT. */
+            400: components["responses"]["BadRequest"];
+            /** @description Not authenticated: UNAUTHENTICATED. */
+            401: components["responses"]["Unauthorized"];
+            /** @description Not allowed: PERMISSION_DENIED. */
+            403: components["responses"]["Forbidden"];
+            /** @description Not found: SCREEN_NOT_FOUND, NOT_FOUND. */
+            404: components["responses"]["NotFound"];
+            /** @description Rate limited: RATE_LIMITED. */
+            429: components["responses"]["TooManyRequests"];
+            /** @description Internal error: INTERNAL. */
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listPorts: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional label that groups calls into one run in the screen's history. It is only a label and never locks the screen. The SDK fills it from KUBI_RUN, else Claude Code's CLAUDE_CODE_SESSION_ID, else one id per client it creates.
+                 * @example 6f1c2a90-3d4b-4e8f-9a1c-7b2d5e8f0a13
+                 */
+                "Kubi-Run"?: components["parameters"]["Run"];
+            };
+            path: {
+                /**
+                 * @description Screen id (`scr_...`).
+                 * @example scr_7f2kq9w3x8m4b6tzp1ac
+                 */
+                screen_id: components["parameters"]["ScreenId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    "Billing-Warning": components["headers"]["BillingWarning"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortList"];
+                };
+            };
+            /** @description Bad request: INVALID_ARGUMENT. */
+            400: components["responses"]["BadRequest"];
+            /** @description Not authenticated: UNAUTHENTICATED. */
+            401: components["responses"]["Unauthorized"];
+            /** @description Not allowed: PERMISSION_DENIED. */
+            403: components["responses"]["Forbidden"];
+            /** @description Not found: SCREEN_NOT_FOUND. */
+            404: components["responses"]["NotFound"];
             /** @description Rate limited: RATE_LIMITED. */
             429: components["responses"]["TooManyRequests"];
             /** @description Internal error: INTERNAL. */

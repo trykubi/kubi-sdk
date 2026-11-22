@@ -14,6 +14,7 @@ export type Screenshot = Schemas['Screenshot']
 export type Action = Schemas['Action']
 export type ActionsResponse = Schemas['ActionsResponse']
 export type HistoryEntry = Schemas['HistoryEntry']
+export type Port = Schemas['Port']
 export type ApiError = Schemas['Error']
 /** The query parameters of one operation in the spec. */
 export type Query<K extends keyof operations> = NonNullable<operations[K]['parameters']['query']>
@@ -491,6 +492,25 @@ export class ScreenClient {
     /** Puts text on the clipboard without pasting it; to paste, use `type` with `via: "paste"`. */
     set: (body: Schemas['ClipboardSet']) =>
       unwrap(this.raw.PUT('/screens/{screen_id}/clipboard', { params: { path: this.path }, body })),
+  }
+
+  /**
+   * A service listening inside the screen, given its own HTTPS URL for HTTP and WebSocket. Needs `network`; at most 3
+   * per screen. With `token` access every request carries `Kubi-Port-Token: <token>`; with `link` the URL alone gets
+   * in. A port stays open across stop and start and closes with the screen.
+   */
+  readonly ports = {
+    list: () => unwrap(this.raw.GET('/screens/{screen_id}/ports', { params: { path: this.path } })),
+    /** Opens the port, or returns it when it is already open with the same access. */
+    open: (port: number, body: Schemas['PortOpen'] = {}) =>
+      unwrap(this.raw.PUT('/screens/{screen_id}/ports/{port}', { params: { path: { ...this.path, port } }, body })),
+    /** The port's URL and, with `token` access, its token. */
+    get: (port: number) =>
+      unwrap(this.raw.GET('/screens/{screen_id}/ports/{port}', { params: { path: { ...this.path, port } } })),
+    /** Closes the port and ends the connections through it. */
+    close: async (port: number): Promise<void> => {
+      await unwrap(this.raw.DELETE('/screens/{screen_id}/ports/{port}', { params: { path: { ...this.path, port } } }))
+    },
   }
 
   /** A live-view link: open within 60 s, single use. Links agents make are view-only. */

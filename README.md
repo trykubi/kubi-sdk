@@ -141,6 +141,20 @@ for await (const row of screen.followHistory()) console.log(row.at, row.summary)
 From the dashboard a person can press **Take control** and use the desktop themselves; the agent's calls are refused
 until they press **Release** or 5 minutes pass with no input. More: [People and agents](https://docs.trykubi.com/concepts/people-and-agents).
 
+### Reach a server inside it
+
+```ts
+// T3 Code, a dev server or an app's API listening on the screen's port 3000; needs a key with `network`
+const { url, token } = await screen.ports.open(3000) // https://3000-<random>.trykubi.dev
+const res = await fetch(`${url}/health`, { headers: { 'Kubi-Port-Token': token! } })
+
+await screen.ports.open(5173, { access: 'link' }) // the URL alone gets in, for a browser or a desktop app
+await screen.ports.close(3000) // ends the connections through it
+```
+
+HTTP and WebSocket, at most 3 ports per screen, kept across stop and start. More:
+[Ports](https://docs.trykubi.com/guides/ports).
+
 ### Snapshots, templates and disposable screens
 
 ```ts
@@ -192,7 +206,7 @@ const kubi = new Kubi({ apiKey: process.env.MY_KUBI_KEY, run: 'nightly-eval-42' 
 - `kubi.screen(id)`: get, update, delete, start, stop, restart, convert, reset, `snapshots`, `operations`;
   screenshot, screenshotImage, zoom, tree; act and the single actions (click, type, press, scroll, drag, move);
   exec, `execs` (get, kill), waitForExec; `files` (upload, download, list, all); `clipboard` (get, set);
-  viewerLink; `history` (list, all, screenshot) and followHistory.
+  `ports` (list, open, get, close); viewerLink; `history` (list, all, screenshot) and followHistory.
 - Method names follow the TypeScript samples in the spec. Every `all` is an async iterator over `next`.
 - The helpers wrap the long polls (`wait_s`, at most 25 s a call): `operations.wait`, `waitForExec`,
   `followHistory`, and on the screen `wait` (split into 20 s waits) and `settle`. A wait that runs out of time

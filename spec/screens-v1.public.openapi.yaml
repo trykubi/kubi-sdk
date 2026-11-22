@@ -97,7 +97,7 @@ tags:
 - name: Account
   description: Who is calling, limits, and the spec itself.
 - name: Network
-  description: Send a screen's traffic through your own proxy.
+  description: Reach services inside a screen through its ports, and send its traffic through your own proxy.
 - name: Secrets
   description: Values kept in each screen's memory and put into every command's environment, never on its disk.
     The API never shows them.
@@ -5265,6 +5265,350 @@ paths:
           import { Kubi } from "@trykubi/sdk";
           const client = new Kubi(); // reads KUBI_API_KEY
           const spec = await client.openApi();
+  /screens/{screen_id}/ports/{port}:
+    put:
+      operationId: openPort
+      summary: Open a port
+      description: |-
+        Needs the `network` permission. Answers within 5 s.
+
+        Gives the service listening on this port inside the screen its own HTTPS URL, for HTTP and WebSocket requests: a dev server, an app's API, a coding agent's server. At most 3 ports per screen, included in the price. With `token` access (the default) every request carries the returned token in `Kubi-Port-Token`; your own `Authorization` header passes through to the service. With `link` access the URL alone gets in. The port stays open across stop and start, and closes with the screen. Opening a port that is already open with the same access returns it unchanged (200); with the other access it is refused, so close it first. Raw TCP (SSH, databases) is not carried.
+      tags:
+      - Network
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ScreenId'
+      - $ref: '#/components/parameters/Port'
+      - $ref: '#/components/parameters/Run'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortOpen'
+            examples:
+              token:
+                value:
+                  access: token
+              link:
+                value:
+                  access: link
+      responses:
+        '201':
+          description: Opened.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Billing-Warning:
+              $ref: '#/components/headers/BillingWarning'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+              examples:
+                token:
+                  value:
+                    port: 3773
+                    access: token
+                    url: https://3773-k7q2m9x4w8p3t6z1b5n0c2v7ra.trykubi.dev
+                    token: kpt_3fQ9xZ1mK7pW2rT8vY4bN6cH0sJ5dL1a
+                    screen_id: scr_7f2kq9w3x8m4b6tzp1ac
+                    created_at: '2026-10-22T09:14:07Z'
+                link:
+                  value:
+                    port: 3773
+                    access: link
+                    url: https://3773-k7q2m9x4w8p3t6z1b5n0c2v7ra.trykubi.dev
+                    token: null
+                    screen_id: scr_7f2kq9w3x8m4b6tzp1ac
+                    created_at: '2026-10-22T09:14:07Z'
+        '200':
+          description: Already open with this access.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Billing-Warning:
+              $ref: '#/components/headers/BillingWarning'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+              examples:
+                token:
+                  value:
+                    port: 3773
+                    access: token
+                    url: https://3773-k7q2m9x4w8p3t6z1b5n0c2v7ra.trykubi.dev
+                    token: kpt_3fQ9xZ1mK7pW2rT8vY4bN6cH0sJ5dL1a
+                    screen_id: scr_7f2kq9w3x8m4b6tzp1ac
+                    created_at: '2026-10-22T09:14:07Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 'Bad request: INVALID_ARGUMENT.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Not authenticated: UNAUTHENTICATED.'
+        '402':
+          $ref: '#/components/responses/PaymentRequired'
+          description: 'Payment needed: QUOTA_EXCEEDED.'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Not allowed: PERMISSION_DENIED.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 'Not found: SCREEN_NOT_FOUND.'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+          description: 'Unsupported media type: UNSUPPORTED_MEDIA_TYPE.'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: 'Rate limited: RATE_LIMITED.'
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 'Internal error: INTERNAL.'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: |-
+          curl -X PUT 'https://api.trykubi.com/v1/screens/scr_7f2kq9w3x8m4b6tzp1ac/ports/3000' \
+            -H "Authorization: Bearer $KUBI_API_KEY" \
+            -H 'Content-Type: application/json' \
+            -d '{"access": "token"}'
+      - lang: TypeScript
+        label: TypeScript SDK
+        source: |-
+          import { Kubi } from "@trykubi/sdk";
+          const client = new Kubi(); // reads KUBI_API_KEY
+          const { url, token } = await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").ports.open(3000, { access: "token" });
+          const res = await fetch(url, { headers: { "Kubi-Port-Token": token } });
+    get:
+      operationId: getPort
+      summary: Read a port
+      description: |-
+        Needs the `network` permission. Answers within 2 s.
+
+        One open port, with its URL and token.
+      tags:
+      - Network
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ScreenId'
+      - $ref: '#/components/parameters/Port'
+      - $ref: '#/components/parameters/Run'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Billing-Warning:
+              $ref: '#/components/headers/BillingWarning'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+              examples:
+                token:
+                  value:
+                    port: 3773
+                    access: token
+                    url: https://3773-k7q2m9x4w8p3t6z1b5n0c2v7ra.trykubi.dev
+                    token: kpt_3fQ9xZ1mK7pW2rT8vY4bN6cH0sJ5dL1a
+                    screen_id: scr_7f2kq9w3x8m4b6tzp1ac
+                    created_at: '2026-10-22T09:14:07Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 'Bad request: INVALID_ARGUMENT.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Not authenticated: UNAUTHENTICATED.'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Not allowed: PERMISSION_DENIED.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 'Not found: SCREEN_NOT_FOUND, NOT_FOUND.'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: 'Rate limited: RATE_LIMITED.'
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 'Internal error: INTERNAL.'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: |-
+          curl 'https://api.trykubi.com/v1/screens/scr_7f2kq9w3x8m4b6tzp1ac/ports/3000' \
+            -H "Authorization: Bearer $KUBI_API_KEY"
+      - lang: TypeScript
+        label: TypeScript SDK
+        source: |-
+          import { Kubi } from "@trykubi/sdk";
+          const client = new Kubi(); // reads KUBI_API_KEY
+          const { url, access } = await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").ports.get(3000);
+    delete:
+      operationId: closePort
+      summary: Close a port
+      description: |-
+        Needs the `network` permission. Answers within 2 s.
+
+        The URL stops answering, and connections open through it end within 3 seconds. Open it again for a new URL and token.
+      tags:
+      - Network
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ScreenId'
+      - $ref: '#/components/parameters/Port'
+      - $ref: '#/components/parameters/Run'
+      responses:
+        '204':
+          description: Closed.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Billing-Warning:
+              $ref: '#/components/headers/BillingWarning'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 'Bad request: INVALID_ARGUMENT.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Not authenticated: UNAUTHENTICATED.'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Not allowed: PERMISSION_DENIED.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 'Not found: SCREEN_NOT_FOUND, NOT_FOUND.'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: 'Rate limited: RATE_LIMITED.'
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 'Internal error: INTERNAL.'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: |-
+          curl -X DELETE 'https://api.trykubi.com/v1/screens/scr_7f2kq9w3x8m4b6tzp1ac/ports/3000' \
+            -H "Authorization: Bearer $KUBI_API_KEY"
+      - lang: TypeScript
+        label: TypeScript SDK
+        source: |-
+          import { Kubi } from "@trykubi/sdk";
+          const client = new Kubi(); // reads KUBI_API_KEY
+          await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").ports.close(3000);
+  /screens/{screen_id}/ports:
+    get:
+      operationId: listPorts
+      summary: List open ports
+      description: |-
+        Needs the `network` permission. Answers within 2 s.
+
+        The screen's open ports with their URLs and tokens.
+      tags:
+      - Network
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ScreenId'
+      - $ref: '#/components/parameters/Run'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Billing-Warning:
+              $ref: '#/components/headers/BillingWarning'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortList'
+              examples:
+                page:
+                  value:
+                    data:
+                    - port: 3773
+                      access: token
+                      url: https://3773-k7q2m9x4w8p3t6z1b5n0c2v7ra.trykubi.dev
+                      token: kpt_3fQ9xZ1mK7pW2rT8vY4bN6cH0sJ5dL1a
+                      screen_id: scr_7f2kq9w3x8m4b6tzp1ac
+                      created_at: '2026-10-22T09:14:07Z'
+                    next: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 'Bad request: INVALID_ARGUMENT.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Not authenticated: UNAUTHENTICATED.'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Not allowed: PERMISSION_DENIED.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 'Not found: SCREEN_NOT_FOUND.'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: 'Rate limited: RATE_LIMITED.'
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 'Internal error: INTERNAL.'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: |-
+          curl 'https://api.trykubi.com/v1/screens/scr_7f2kq9w3x8m4b6tzp1ac/ports' \
+            -H "Authorization: Bearer $KUBI_API_KEY"
+      - lang: TypeScript
+        label: TypeScript SDK
+        source: |-
+          import { Kubi } from "@trykubi/sdk";
+          const client = new Kubi(); // reads KUBI_API_KEY
+          const { data } = await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").ports.list();
   /secrets:
     get:
       operationId: listSecrets
@@ -5376,7 +5720,7 @@ components:
         - `COORDINATE_OUT_OF_RANGE` (400): A point lies outside the coordinate space; it is rejected, never clamped. Use a point inside details.space.
         - `BATCH_TOO_LONG` (400): The batch would run past 28 s, inside the 30 s call limit. Split it into smaller batches.
         - `UNAUTHENTICATED` (401): The credential is missing, malformed, unknown, revoked or expired (details.reason). Send a valid key or token.
-        - `QUOTA_EXCEEDED` (402): The organization is at its screen cap (details.screen_cap). Delete a screen, or a person asks support for a higher cap.
+        - `QUOTA_EXCEEDED` (402): The organization is at its screen cap (details.screen_cap), or the screen at its port cap (details.port_cap). Delete a screen or close a port, or a person asks support for a higher cap.
         - `PAYMENT_REQUIRED` (402): Payment failed. A person pays at details.pay_url.
         - `CREDIT_EXHAUSTED` (402): The usage credit that pays for disposable screens is used up (details.balance_usd). A person tops up at details.billing_url, or create a persistent screen.
         - `SUBSCRIPTION_REQUIRED` (402): Buying usage credit needs a paid persistent screen first. A person subscribes at details.billing_url.
@@ -5621,11 +5965,13 @@ components:
       - control
       - exec
       - power
+      - network
       maxLength: 10
       title: Permission
       description: 'read: see screens, screenshots and history. control: act on the GUI. exec: run commands, read,
-        write and list files. power: create, start, stop, restart (and, for API keys, delete). Same names as OAuth
-        scopes.'
+        write and list files. power: create, start, stop, restart (and, for API keys, delete). network: open, read
+        and close a screen''s ports; off unless ticked on the key. The first four are also the OAuth scopes; MCP
+        clients can''t have network.'
     Coordinate:
       type: integer
       format: int32
@@ -8904,6 +9250,87 @@ components:
               minimum: 1
               maximum: 1000
               description: 'Per screen: all other calls.'
+    Port:
+      type: object
+      title: Port
+      description: 'An open port: HTTP and WebSocket requests to `url` reach the service listening on this port
+        inside the screen, on 127.0.0.1 or 0.0.0.0, with the request''s Host kept and `X-Forwarded-Proto: https`
+        set. Answers the port relay gives itself, in the error shape: 401 UNAUTHENTICATED (no token or a wrong one),
+        403 ORGANIZATION_SUSPENDED, 404 NOT_FOUND, 409 SCREEN_NOT_RUNNING, 429 RATE_LIMITED, 502 PORT_NOT_LISTENING
+        (nothing listens on the port), 503 SCREEN_UNAVAILABLE. Every other answer is the service''s.'
+      required:
+      - port
+      - access
+      - url
+      - token
+      - screen_id
+      - created_at
+      properties:
+        port:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 65535
+          description: The TCP port inside the screen.
+        access:
+          type: string
+          enum:
+          - token
+          - link
+          maxLength: 5
+          description: 'token: every request must carry the token in `Kubi-Port-Token`. link: the URL alone gets
+            in, for apps that can''t add a header; anyone holding it reaches the service.'
+        url:
+          type: string
+          maxLength: 300
+          format: uri
+          description: The port's own HTTPS origin. Keep it secret with `link` access.
+        token:
+          oneOf:
+          - type: string
+            maxLength: 40
+            pattern: ^kpt_[A-Za-z0-9_-]{32}$
+            format: password
+            description: Send it as `Kubi-Port-Token` on every request and WebSocket handshake. null with `link`
+              access.
+          - type: "null"
+        screen_id:
+          type: string
+          pattern: ^scr_[0-9a-z]{20}$
+          maxLength: 24
+        created_at:
+          type: string
+          format: date-time
+          maxLength: 40
+    PortList:
+      type: object
+      title: PortList
+      required:
+      - data
+      - next
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Port'
+          maxItems: 100
+        next:
+          oneOf:
+          - type: string
+            maxLength: 200
+          - type: "null"
+    PortOpen:
+      type: object
+      title: PortOpen
+      properties:
+        access:
+          type: string
+          enum:
+          - token
+          - link
+          default: token
+          maxLength: 5
+      additionalProperties: false
     Secret:
       type: object
       title: Secret
@@ -9266,6 +9693,17 @@ components:
         type: string
         maxLength: 200
         pattern: ^[A-Za-z0-9_-]+$
+    Port:
+      name: port
+      in: path
+      required: true
+      description: A TCP port inside the screen, 1 to 65535.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 65535
+      example: 3773
     WaitS:
       name: wait_s
       in: query
@@ -9536,8 +9974,9 @@ components:
               value:
                 error:
                   code: QUOTA_EXCEEDED
-                  message: The organization is at its screen cap (details.screen_cap). Delete a screen, or a person
-                    asks support for a higher cap.
+                  message: The organization is at its screen cap (details.screen_cap), or the screen at its port
+                    cap (details.port_cap). Delete a screen or close a port, or a person asks support for a higher
+                    cap.
                   request_id: req_01jb7q0x9v2k8m4n6p3r
                   retryable: false
                   retry_after: null
