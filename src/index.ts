@@ -295,6 +295,10 @@ export class ScreenClient {
   delete() {
     return unwrap(this.raw.DELETE('/screens/{screen_id}', { params: { path: this.path } }))
   }
+  /** What the screen has cost, hour by hour at list price; still readable after it is deleted, `final` then. */
+  spend() {
+    return unwrap(this.raw.GET('/screens/{screen_id}/spend', { params: { path: this.path } }))
+  }
   start() {
     return unwrap(this.raw.POST('/screens/{screen_id}/start', { params: { path: this.path } }))
   }
@@ -462,7 +466,7 @@ export class ScreenClient {
   }
 
   readonly files = {
-    /** Writes `data` to `path` on the screen, up to 64 MiB. */
+    /** Writes `data` to `path` on the screen, up to 1 GiB. */
     upload: (path: string, data: Upload, opts: Omit<Query<'uploadFile'>, 'path'> = {}) =>
       unwrap(
         this.raw.PUT('/screens/{screen_id}/files', {
@@ -476,6 +480,14 @@ export class ScreenClient {
       bytes(
         this.raw.GET('/screens/{screen_id}/files', {
           params: { path: this.path, query: { path } },
+          parseAs: 'arrayBuffer',
+        }),
+      ),
+    /** A file through the one-time link the hosted MCP's `read_file` answers with; `ticket` is its `t`. */
+    downloadLink: (ticket: string) =>
+      bytes(
+        this.raw.GET('/screens/{screen_id}/files/link', {
+          params: { path: this.path, query: { t: ticket } },
           parseAs: 'arrayBuffer',
         }),
       ),
