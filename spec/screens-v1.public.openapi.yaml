@@ -725,6 +725,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScreenSpendRecord'
+              examples:
+                deleted:
+                  value:
+                    screen_id: scr_8f3k2m9q4x7p1n5r6t0w
+                    name: eval-run-17
+                    state: deleted
+                    final: true
+                    running_s: 1260
+                    stopped_s: 0
+                    charged_usd: 0.0128
+                    hours:
+                    - hour: '2026-11-28T09:00:00Z'
+                      running_s: 1260
+                      stopped_s: 0
+                      steps: 22
+                      charged_usd: 0.0128
+                      running_hour_usd: 0.035
+                      stopped_hour_usd: 0.003
+                      step_s: 60
+                    as_of: '2026-11-28T09:21:00Z'
         '400':
           $ref: '#/components/responses/BadRequest'
           description: 'Bad request: INVALID_ARGUMENT.'
