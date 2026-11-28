@@ -83,7 +83,7 @@ tags:
   description: 'See the screen: JSON with a base64 image, raw image bytes, or a zoomed region.'
 - name: Actions
   description: Click, type, press keys, scroll, drag and move the pointer. One action per call, or a batch of up
-    to 20 in one round trip.
+    to 50 in one round trip.
 - name: Commands
   description: Run shell commands. Short ones answer inline, long ones return an id to poll.
 - name: Files
@@ -123,8 +123,8 @@ paths:
         description: Filter by `key:value`.
         schema:
           type: string
-          maxLength: 141
-          pattern: ^[a-z0-9_.-]{1,40}:.{0,100}$
+          maxLength: 319
+          pattern: ^[A-Za-z0-9_./-]{1,63}:.{0,255}$
       - name: state
         in: query
         required: false
@@ -690,6 +690,65 @@ paths:
           import { Kubi } from "@trykubi/sdk";
           const client = new Kubi(); // reads KUBI_API_KEY
           const op = await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").delete();
+  /screens/{screen_id}/spend:
+    get:
+      operationId: getScreenSpend
+      summary: Read a disposable screen's spend record
+      description: |-
+        Needs the `read` permission. Answers within 2 s.
+
+        Seconds run and stopped, steps and credit charged per UTC hour, at the list price. It stays readable after the screen is deleted, for screens of your organization, and is `final` once the delete is done: every step is charged as it starts. A persistent screen has no spend record: SCREEN_NOT_FOUND.
+      tags:
+      - Screens
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ScreenId'
+      - $ref: '#/components/parameters/Run'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Billing-Warning:
+              $ref: '#/components/headers/BillingWarning'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenSpendRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 'Bad request: INVALID_ARGUMENT.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Not authenticated: UNAUTHENTICATED.'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Not allowed: PERMISSION_DENIED.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 'Not found: SCREEN_NOT_FOUND.'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: 'Rate limited: RATE_LIMITED.'
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 'Internal error: INTERNAL.'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: |-
+          curl 'https://api.trykubi.com/v1/screens/scr_7f2kq9w3x8m4b6tzp1ac/spend' \
+            -H "Authorization: Bearer $KUBI_API_KEY"
   /screens/{screen_id}/start:
     post:
       operationId: startScreen
@@ -2041,9 +2100,9 @@ paths:
       - name: marks
         in: query
         required: false
-        description: 'true: draw the id of each element an agent can act on in the active window on the image, list
-          them in `marks` and bind them to this screenshot_id, so a model can act by `element` without reading the
-          tree. 409 UNSUPPORTED_CAPABILITY on a screen that can''t read trees.'
+        description: 'true: draw the id of each element an agent can act on in every window that shows, topmost
+          first, on the image, list them in `marks` and bind them to this screenshot_id, so a model can act by `element`
+          without reading the tree. 409 UNSUPPORTED_CAPABILITY on a screen that can''t read trees.'
         schema:
           type: boolean
           default: false
@@ -2544,9 +2603,9 @@ paths:
       description: |-
         Needs the `control` permission. Answers within 28 s.
 
-        Runs 1 to 20 input actions in order, 100 ms apart: click, move, drag, scroll, type, key, wait, settle, zoom and more. Stops at the first failure (status `partial`, later actions `not_executed`). With `screenshot: after` the reply carries the screen after the last action that ran, once it settles, so one call is one agent step.
+        Runs 1 to 50 input actions in order, 100 ms apart: click, move, drag, scroll, type, key, wait, settle, zoom and more. Stops at the first failure (status `partial`, later actions `not_executed`). With `screenshot: after` the reply carries the screen after the last action that ran, once it settles, so one call is one agent step.
 
-        Coordinates are in `space`: by default the size of the screenshot named by `screenshot_id`, else 1280x720. Points outside are rejected, never clamped. With `screenshot_id`, nothing runs if any input ran after that shot (a person's in the live view included) or the screen restarted (409 STALE_OBSERVATION).
+        Coordinates are in `space`: by default the size of the screenshot named by `screenshot_id`, else 1280x720. Points outside are rejected, never clamped. With `screenshot_id`, nothing runs if any input ran after that shot (a person's in the live view included) or the screen restarted (409 STALE_OBSERVATION), unless the batch has no input: only wait, settle, cursor_position, screenshot and zoom.
 
         Pointer actions take `element`, an id from getAccessibilityTree read for the same `screenshot_id`, in place of x and y; `set_value` and `invoke` act through accessibility and `focus` raises a window. `tree: after` attaches the tree after the batch, and `expect` checks up to 8 conditions after it (`expectation`: satisfied, unsatisfied or unknown).
 
@@ -3609,6 +3668,8 @@ paths:
                     stderr: ""
                     stdout_bytes: 9
                     stderr_bytes: 0
+                    stdout_next: 9
+                    stderr_next: 0
                     output_dropped: false
                     incarnation: 3
         '202':
@@ -3652,6 +3713,8 @@ paths:
                     stderr: ""
                     stdout_bytes: 26
                     stderr_bytes: 0
+                    stdout_next: 9
+                    stderr_next: 0
                     output_dropped: false
                     incarnation: 3
         '400':
@@ -3710,7 +3773,7 @@ paths:
       description: |-
         Needs the `exec` permission. Answers within 28 s.
 
-        Status, exit code and output from byte offsets. With `wait_s`, `until=exit` (default) holds the reply until the command ends; `until=output` answers as soon as it prints (for live log views). Output keeps the last 1 MiB per stream for 24 h after exit.
+        Status, exit code and output from byte offsets. With `wait_s`, `until=exit` (default) holds the reply until the command ends; `until=output` answers as soon as it prints (for live log views). Output keeps the last 16 MiB per stream for 24 h after exit.
       tags:
       - Commands
       security:
@@ -3733,7 +3796,7 @@ paths:
       - name: stdout_from
         in: query
         required: false
-        description: Byte offset in stdout to read from (the last reply's stdout_bytes).
+        description: Byte offset in stdout to read from. To follow a command, the last reply's stdout_next.
         schema:
           type: integer
           format: int64
@@ -3743,7 +3806,7 @@ paths:
       - name: stderr_from
         in: query
         required: false
-        description: Byte offset in stderr to read from (the last reply's stderr_bytes).
+        description: Byte offset in stderr to read from. To follow a command, the last reply's stderr_next.
         schema:
           type: integer
           format: int64
@@ -3804,6 +3867,8 @@ paths:
                     stderr: ""
                     stdout_bytes: 26
                     stderr_bytes: 0
+                    stdout_next: 9
+                    stderr_next: 0
                     output_dropped: false
                     incarnation: 3
         '400':
@@ -3901,6 +3966,8 @@ paths:
                     stderr: ""
                     stdout_bytes: 26
                     stderr_bytes: 0
+                    stdout_next: 9
+                    stderr_next: 0
                     output_dropped: false
                     incarnation: 3
         '400':
@@ -3955,7 +4022,7 @@ paths:
       description: |-
         Needs the `exec` permission. Answers within 28 s.
 
-        Writes the request body to `path` on the screen as the desktop user, creating folders. Replaces an existing file. Up to 64 MiB; bigger files go through exec (curl, git) for now. The 28 s limit counts our work after the body has arrived, not your upload time. The hosted MCP's `write_file` wraps it for files up to 64 KiB.
+        Writes the request body to `path` on the screen as the desktop user, creating folders. Replaces an existing file. Up to 1 GiB, streamed; the file is replaced only once every byte is in. The 28 s limit counts our work after the body has arrived, not your upload time. The hosted MCP's `write_file` wraps it for files up to 64 KiB.
       tags:
       - Files
       security:
@@ -4056,7 +4123,7 @@ paths:
       description: |-
         Needs the `exec` permission. Answers within 28 s.
 
-        Returns the file at `path` as bytes. Up to 64 MiB. Needs `exec` (a screen holds logins and keys). The hosted MCP's `read_file` wraps it for files up to 64 KiB.
+        Returns the file at `path` as bytes. Up to 1 GiB, streamed. Needs `exec` (a screen holds logins and keys). The hosted MCP's `read_file` wraps it for files up to 64 KiB, and answers a bigger one with a download link (downloadFileLink).
       tags:
       - Files
       security:
@@ -4132,6 +4199,85 @@ paths:
           import { Kubi } from "@trykubi/sdk";
           const client = new Kubi(); // reads KUBI_API_KEY
           const bytes = await client.screen("scr_7f2kq9w3x8m4b6tzp1ac").files.download("/home/user/report.pdf");
+  /screens/{screen_id}/files/link:
+    get:
+      operationId: downloadFileLink
+      summary: Download a file by its link
+      description: |-
+        No key needed. Answers within 28 s.
+
+        The download link the hosted MCP's `read_file` answers with when a file is over 64 KiB (or when asked with `link: true`), since a tool's result goes into the model's context and a big file can't. The ticket `t` is the credential: no API key, so an agent's curl or a person's browser can fetch it. It downloads one file, up to 1 GiB, once, within 5 minutes of being made, as the key or app that made it (its rate limit, its history row), while that credential exists and the screen runs. A used, expired or unknown ticket gets 401 UNAUTHENTICATED. Compare the bytes with the SHA-256 `read_file` gave, or with the header.
+      tags:
+      - Files
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/ScreenId'
+      - name: t
+        in: query
+        required: true
+        description: The link's ticket.
+        schema:
+          type: string
+          maxLength: 35
+          pattern: ^fl_[A-Za-z0-9_-]{32}$
+        example: fl_4Hq8mZ2kP9xW3nR7bT5c6Yd1Lf0Ga8Ks
+      responses:
+        '200':
+          description: Success.
+          headers:
+            Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            Deprecation:
+              $ref: '#/components/headers/Deprecation'
+            Sunset:
+              $ref: '#/components/headers/Sunset'
+            Kubi-File-Sha256:
+              description: SHA-256 of the file.
+              schema:
+                type: string
+                maxLength: 64
+            Content-Disposition:
+              description: attachment, with the file's name.
+              schema:
+                type: string
+                maxLength: 300
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                maxLength: 67108864
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 'Bad request: INVALID_ARGUMENT.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Not authenticated: UNAUTHENTICATED.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 'Not found: FILE_NOT_FOUND.'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Conflict with the screen''s state: CONTROL_HELD, SCREEN_NOT_RUNNING.'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+          description: 'Too large: PAYLOAD_TOO_LARGE.'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: 'Rate limited: RATE_LIMITED.'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+          description: 'Screen unavailable: SCREEN_UNAVAILABLE.'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: |-
+          curl 'https://api.trykubi.com/v1/screens/scr_7f2kq9w3x8m4b6tzp1ac/files/link?t=fl_4Hq8mZ2kP9xW3nR7bT5c6Yd1Lf0Ga8Ks' \
+            -o report.pdf
   /screens/{screen_id}/dir:
     get:
       operationId: listFiles
@@ -4879,7 +5025,7 @@ paths:
       description: |-
         Needs the `read` permission. Answers within 28 s.
 
-        Every call made on the screen, newest first: what was called, its parameters and typed text, which key or app called it, its run label, the result, how long it took and the screenshot it returned. Changes to the screen are rows too. Kept 30 days. With detailed history off, rows keep only what was called, by whom, when and the result. The live view is never recorded, and typed text that matches an organization secret is replaced. Rows are written after the reply, never on the call's path. To follow live, pass `since` (a row id) with `wait_s` and get newer rows oldest first.
+        Every call made on the screen, newest first: what was called, its parameters and typed text, which key or app called it, its run label, the result, how long it took and the screenshot it returned. Changes to the screen are rows too. Kept 30 days, also after the screen is deleted: a deleted screen's history stays readable by its id, read only. With detailed history off, rows keep only what was called, by whom, when and the result. The live view is never recorded, and typed text that matches an organization secret is replaced. Rows are written after the reply, never on the call's path. To follow live, pass `since` (a row id) with `wait_s` and get newer rows oldest first.
       tags:
       - History
       security:
@@ -5031,7 +5177,7 @@ paths:
       description: |-
         Needs the `read` permission. Answers within 5 s.
 
-        The exact image a call returned, from the screen's history, as image bytes. Kept 30 days, then 404 NOT_FOUND. Nothing is saved while detailed history is off.
+        The exact image a call returned, from the screen's history, as image bytes. Kept 30 days, also after the screen is deleted (by its id), then 404 NOT_FOUND. Nothing is saved while detailed history is off.
       tags:
       - History
       security:
@@ -5733,7 +5879,7 @@ components:
         - `NOT_FOUND` (404): No such operation, exec, key, app, export, template, snapshot or saved screenshot (saved ones go after 30 days). Check the id.
         - `FILE_NOT_FOUND` (404): Nothing at that path on the screen. List the folder with listFiles.
         - `NO_CAPACITY` (409): No free machine for a new screen right now; nothing was charged. Retry after retry_after.
-        - `STALE_OBSERVATION` (409): Input ran (anyone's, a person's in the live view included) or the screen restarted since your screenshot (details.acted_since, details.restarted). Take a new screenshot first.
+        - `STALE_OBSERVATION` (409): Input ran (anyone's, a person's in the live view included) or the screen restarted since your screenshot (details.acted_since, details.restarted). Act on details.latest_screenshot_id if present, else take a new screenshot.
         - `CONTROL_HELD` (409): A person has control of this screen, so nothing ran. Control ends when they release it, or after 5 minutes with no input from them. Wait retry_after seconds, then take a new screenshot before acting.
         - `SCREEN_NOT_RUNNING` (409): The screen is stopped, starting or stopping. Start it, or wait on its operation.
         - `OPERATION_IN_PROGRESS` (409): Another power operation runs on this screen. Wait on it, then retry.
@@ -5796,6 +5942,23 @@ components:
           items:
             $ref: '#/components/schemas/Permission'
           maxItems: 4
+        choices:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - name
+            properties:
+              id:
+                type: string
+                maxLength: 64
+              name:
+                type: string
+                maxLength: 64
+          maxItems: 1000
+          description: 'INVALID_ARGUMENT for a missing `screen`, SCREEN_NOT_FOUND: the screens the credential can
+            use.'
         acted_since:
           type: integer
           format: int32
@@ -5805,11 +5968,16 @@ components:
         restarted:
           type: boolean
           description: 'STALE_OBSERVATION: the screen restarted since your screenshot.'
+        latest_screenshot_id:
+          type: string
+          maxLength: 64
+          description: 'STALE_OBSERVATION: the newest screenshot, taken after the last input, so still current;
+            absent when none was.'
         action_index:
           type: integer
           format: int32
           minimum: 0
-          maximum: 19
+          maximum: 49
         x:
           type: integer
           format: int32
@@ -6011,13 +6179,13 @@ components:
     Labels:
       type: object
       title: Labels
-      maxProperties: 20
+      maxProperties: 32
       additionalProperties:
         type: string
-        maxLength: 100
+        maxLength: 255
       propertyNames:
-        pattern: ^[a-z0-9_.-]{1,40}$
-        maxLength: 40
+        pattern: ^[A-Za-z0-9_./-]{1,63}$
+        maxLength: 63
       description: Your own key-value tags. Filter lists with `label=key:value`.
     Size:
       type: object
@@ -6299,6 +6467,126 @@ components:
           format: date-time
           maxLength: 40
           description: When it became disposable (created or switched).
+    SpendHour:
+      type: object
+      title: SpendHour
+      description: One UTC hour of a disposable screen's meter.
+      required:
+      - hour
+      - running_s
+      - stopped_s
+      - steps
+      - charged_usd
+      - running_hour_usd
+      - stopped_hour_usd
+      - step_s
+      properties:
+        hour:
+          type: string
+          format: date-time
+          maxLength: 40
+          description: The UTC hour's start.
+        running_s:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 86400
+          description: Seconds run in the hour.
+        stopped_s:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 86400
+          description: Seconds stopped in the hour.
+        steps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Billing steps charged in the hour, each as it started.
+        charged_usd:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1000000
+          description: Credit charged in the hour, at the list price in force.
+        running_hour_usd:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1000
+          description: The list price of an hour running.
+        stopped_hour_usd:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1000
+          description: The list price of an hour stopped.
+        step_s:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 86400
+          description: The billing step.
+    ScreenSpendRecord:
+      type: object
+      title: ScreenSpendRecord
+      description: What a disposable screen cost, from Kubi's meter, at list prices. Readable after the screen is
+        deleted.
+      required:
+      - screen_id
+      - name
+      - state
+      - final
+      - running_s
+      - stopped_s
+      - charged_usd
+      - hours
+      - as_of
+      properties:
+        screen_id:
+          type: string
+          pattern: ^scr_[0-9a-z]{20}$
+          maxLength: 24
+        name:
+          type: string
+          maxLength: 63
+        state:
+          type: string
+          maxLength: 20
+          description: The screen's state, `deleted` included.
+        final:
+          type: boolean
+          description: 'true: the screen is deleted and its figures will not change.'
+        running_s:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1099511627776
+          description: Seconds it has run as a disposable screen.
+        stopped_s:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1099511627776
+          description: Seconds it has been stopped as a disposable screen.
+        charged_usd:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1000000
+          description: Credit charged for it, the step now running included.
+        hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpendHour'
+          maxItems: 17520
+          description: Its meter per UTC hour, oldest first.
+        as_of:
+          type: string
+          format: date-time
+          maxLength: 40
+          description: The time the figures count up to.
     Screen:
       type: object
       title: Screen
@@ -6477,7 +6765,7 @@ components:
         ends_in_s:
           type: integer
           format: int32
-          minimum: 300
+          minimum: 60
           maximum: 2592000
           description: 'Disposable only: delete it this many seconds after it is created. Default: no end time.'
         desktop:
@@ -6960,7 +7248,12 @@ components:
             $ref: '#/components/schemas/Mark'
           maxItems: 150
           description: 'With `marks=true`: the elements whose ids are drawn on the image, bound to this screenshot_id
-            for `element` in runActions.'
+            for `element` in runActions. An element under a window, a dialog or an open list drawn over it has no
+            mark.'
+        marks_complete:
+          type: boolean
+          description: 'With `marks=true`: false when reading the windows'' elements stopped early (the time or
+            element cap), so some elements have no mark; readTree lists them.'
     WindowId:
       type: string
       maxLength: 12
@@ -7994,6 +8287,12 @@ components:
       title: TreeOptions
       description: How the tree after a batch is read.
       properties:
+        window:
+          type: string
+          maxLength: 12
+          pattern: ^(win_[0-9a-f]{1,8}|all)$
+          description: 'A window id, or `all` for every open window, as in getAccessibilityTree. Default: the window
+            of the last action by element while it is open, else the active window.'
         max_elements:
           type: integer
           format: int32
@@ -8141,7 +8440,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Action'
-          maxItems: 20
+          maxItems: 50
           minItems: 1
           description: Run in order, 100 ms apart. Stops at the first failure; the rest are `not_executed`. The
             whole batch must fit in 28 s.
@@ -8153,7 +8452,8 @@ components:
           pattern: ^shot_[0-9a-z]{20}$
           description: 'Optional precondition and coordinate default: the screenshot you acted on. If any input
             ran after it (a person''s in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION.
-            The hosted MCP always sends it.'
+            A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted
+            MCP always sends it.'
         screenshot:
           type: string
           enum:
@@ -8176,7 +8476,7 @@ components:
           maxLength: 5
           description: 'after: attach an accessibility tree after the batch, bound to the after-screenshot''s id
             (or a new one), so its ids are ready for the next call. It reads the window of the last action by element
-            while that window is open, else the active window.'
+            while that window is open, else the active window, or `tree_options.window`.'
         tree_options:
           $ref: '#/components/schemas/TreeOptions'
         expect:
@@ -8196,7 +8496,7 @@ components:
           type: integer
           format: int32
           minimum: 0
-          maximum: 19
+          maximum: 49
         type:
           type: string
           maxLength: 20
@@ -8258,6 +8558,12 @@ components:
           minimum: 1
           maximum: 4194304
           description: 'launch: its process id.'
+        covered_by:
+          type: string
+          maxLength: 300
+          description: 'A click by element: the element the tree shows drawn over its middle, such as a banner''s
+            button. The click went to a part of the element clear of it; with no part clear, to its middle, where
+            it may have hit that element instead.'
         duration_ms:
           type: integer
           format: int32
@@ -8285,7 +8591,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ActionResult'
-          maxItems: 20
+          maxItems: 50
         screenshot:
           oneOf:
           - $ref: '#/components/schemas/Screenshot'
@@ -8444,15 +8750,29 @@ components:
           format: int64
           minimum: 0
           maximum: 1099511627776
-          description: Total bytes written so far. Use as the next stdout_from.
+          description: Total bytes written so far, the whole stream.
         stderr_bytes:
           type: integer
           format: int64
           minimum: 0
           maximum: 1099511627776
+        stdout_next:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1099511627776
+          description: 'The byte offset right after the stdout this reply carries: the next stdout_from. A reply
+            ends on a whole character, so this can sit before stdout_bytes.'
+        stderr_next:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1099511627776
+          description: 'The same for stderr: the next stderr_from.'
         output_dropped:
           type: boolean
-          description: Older output fell out of the 1 MiB per-stream buffer.
+          description: The offsets asked for output that fell out of the last 16 MiB a stream keeps (1 MiB once
+            older finished commands fill their shared 256 MiB); the reply starts at the oldest byte kept.
         incarnation:
           type: integer
           format: int32
@@ -8926,7 +9246,7 @@ components:
     HistoryEntry:
       type: object
       title: HistoryEntry
-      description: One call or event. Kept 30 days.
+      description: One call or event. Kept 30 days, also after its screen is deleted.
       required:
       - id
       - at
@@ -8949,6 +9269,12 @@ components:
           - type: string
             pattern: ^scr_[0-9a-z]{20}$
             maxLength: 24
+          - type: "null"
+        screen_name:
+          oneOf:
+          - type: string
+            maxLength: 63
+            description: The screen's name, which it keeps after it is deleted; null for an account event.
           - type: "null"
         screen_kind:
           oneOf:
@@ -9399,7 +9725,8 @@ components:
           pattern: ^shot_[0-9a-z]{20}$
           description: 'Optional precondition and coordinate default: the screenshot you acted on. If any input
             ran after it (a person''s in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION.
-            The hosted MCP always sends it.'
+            A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted
+            MCP always sends it.'
         screenshot:
           type: string
           enum:
@@ -9454,7 +9781,8 @@ components:
           pattern: ^shot_[0-9a-z]{20}$
           description: 'Optional precondition and coordinate default: the screenshot you acted on. If any input
             ran after it (a person''s in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION.
-            The hosted MCP always sends it.'
+            A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted
+            MCP always sends it.'
         screenshot:
           type: string
           enum:
@@ -9502,7 +9830,8 @@ components:
           pattern: ^shot_[0-9a-z]{20}$
           description: 'Optional precondition and coordinate default: the screenshot you acted on. If any input
             ran after it (a person''s in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION.
-            The hosted MCP always sends it.'
+            A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted
+            MCP always sends it.'
         screenshot:
           type: string
           enum:
@@ -9557,7 +9886,8 @@ components:
           pattern: ^shot_[0-9a-z]{20}$
           description: 'Optional precondition and coordinate default: the screenshot you acted on. If any input
             ran after it (a person''s in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION.
-            The hosted MCP always sends it.'
+            A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted
+            MCP always sends it.'
         screenshot:
           type: string
           enum:
@@ -9597,7 +9927,8 @@ components:
           pattern: ^shot_[0-9a-z]{20}$
           description: 'Optional precondition and coordinate default: the screenshot you acted on. If any input
             ran after it (a person''s in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION.
-            The hosted MCP always sends it.'
+            A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted
+            MCP always sends it.'
         screenshot:
           type: string
           enum:
@@ -9638,7 +9969,8 @@ components:
           pattern: ^shot_[0-9a-z]{20}$
           description: 'Optional precondition and coordinate default: the screenshot you acted on. If any input
             ran after it (a person''s in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION.
-            The hosted MCP always sends it.'
+            A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted
+            MCP always sends it.'
         screenshot:
           type: string
           enum:
@@ -10192,7 +10524,8 @@ components:
                 error:
                   code: STALE_OBSERVATION
                   message: Input ran (anyone's, a person's in the live view included) or the screen restarted since
-                    your screenshot (details.acted_since, details.restarted). Take a new screenshot first.
+                    your screenshot (details.acted_since, details.restarted). Act on details.latest_screenshot_id
+                    if present, else take a new screenshot.
                   request_id: req_01jb7q0x9v2k8m4n6p3r
                   retryable: false
                   retry_after: null
@@ -10201,6 +10534,7 @@ components:
                   details:
                     acted_since: 2
                     restarted: false
+                    latest_screenshot_id: shot_2b09lb42saa394f1rfzc
             control_held:
               summary: CONTROL_HELD
               value:

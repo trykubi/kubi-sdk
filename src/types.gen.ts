@@ -66,6 +66,28 @@ export interface paths {
         patch: operations["updateScreen"];
         trace?: never;
     };
+    "/screens/{screen_id}/spend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a disposable screen's spend record
+         * @description Needs the `read` permission. Answers within 2 s.
+         *
+         *     Seconds run and stopped, steps and credit charged per UTC hour, at the list price. It stays readable after the screen is deleted, for screens of your organization, and is `final` once the delete is done: every step is charged as it starts. A persistent screen has no spend record: SCREEN_NOT_FOUND.
+         */
+        get: operations["getScreenSpend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/screens/{screen_id}/start": {
         parameters: {
             query?: never;
@@ -405,9 +427,9 @@ export interface paths {
          * Run a batch of actions
          * @description Needs the `control` permission. Answers within 28 s.
          *
-         *     Runs 1 to 20 input actions in order, 100 ms apart: click, move, drag, scroll, type, key, wait, settle, zoom and more. Stops at the first failure (status `partial`, later actions `not_executed`). With `screenshot: after` the reply carries the screen after the last action that ran, once it settles, so one call is one agent step.
+         *     Runs 1 to 50 input actions in order, 100 ms apart: click, move, drag, scroll, type, key, wait, settle, zoom and more. Stops at the first failure (status `partial`, later actions `not_executed`). With `screenshot: after` the reply carries the screen after the last action that ran, once it settles, so one call is one agent step.
          *
-         *     Coordinates are in `space`: by default the size of the screenshot named by `screenshot_id`, else 1280x720. Points outside are rejected, never clamped. With `screenshot_id`, nothing runs if any input ran after that shot (a person's in the live view included) or the screen restarted (409 STALE_OBSERVATION).
+         *     Coordinates are in `space`: by default the size of the screenshot named by `screenshot_id`, else 1280x720. Points outside are rejected, never clamped. With `screenshot_id`, nothing runs if any input ran after that shot (a person's in the live view included) or the screen restarted (409 STALE_OBSERVATION), unless the batch has no input: only wait, settle, cursor_position, screenshot and zoom.
          *
          *     Pointer actions take `element`, an id from getAccessibilityTree read for the same `screenshot_id`, in place of x and y; `set_value` and `invoke` act through accessibility and `focus` raises a window. `tree: after` attaches the tree after the batch, and `expect` checks up to 8 conditions after it (`expectation`: satisfied, unsatisfied or unknown).
          *
@@ -599,7 +621,7 @@ export interface paths {
          * Get a command's status and output
          * @description Needs the `exec` permission. Answers within 28 s.
          *
-         *     Status, exit code and output from byte offsets. With `wait_s`, `until=exit` (default) holds the reply until the command ends; `until=output` answers as soon as it prints (for live log views). Output keeps the last 1 MiB per stream for 24 h after exit.
+         *     Status, exit code and output from byte offsets. With `wait_s`, `until=exit` (default) holds the reply until the command ends; `until=output` answers as soon as it prints (for live log views). Output keeps the last 16 MiB per stream for 24 h after exit.
          */
         get: operations["getExec"];
         put?: never;
@@ -643,16 +665,38 @@ export interface paths {
          * Download a file
          * @description Needs the `exec` permission. Answers within 28 s.
          *
-         *     Returns the file at `path` as bytes. Up to 64 MiB. Needs `exec` (a screen holds logins and keys). The hosted MCP's `read_file` wraps it for files up to 64 KiB.
+         *     Returns the file at `path` as bytes. Up to 1 GiB, streamed. Needs `exec` (a screen holds logins and keys). The hosted MCP's `read_file` wraps it for files up to 64 KiB, and answers a bigger one with a download link (downloadFileLink).
          */
         get: operations["downloadFile"];
         /**
          * Upload a file
          * @description Needs the `exec` permission. Answers within 28 s.
          *
-         *     Writes the request body to `path` on the screen as the desktop user, creating folders. Replaces an existing file. Up to 64 MiB; bigger files go through exec (curl, git) for now. The 28 s limit counts our work after the body has arrived, not your upload time. The hosted MCP's `write_file` wraps it for files up to 64 KiB.
+         *     Writes the request body to `path` on the screen as the desktop user, creating folders. Replaces an existing file. Up to 1 GiB, streamed; the file is replaced only once every byte is in. The 28 s limit counts our work after the body has arrived, not your upload time. The hosted MCP's `write_file` wraps it for files up to 64 KiB.
          */
         put: operations["uploadFile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{screen_id}/files/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a file by its link
+         * @description No key needed. Answers within 28 s.
+         *
+         *     The download link the hosted MCP's `read_file` answers with when a file is over 64 KiB (or when asked with `link: true`), since a tool's result goes into the model's context and a big file can't. The ticket `t` is the credential: no API key, so an agent's curl or a person's browser can fetch it. It downloads one file, up to 1 GiB, once, within 5 minutes of being made, as the key or app that made it (its rate limit, its history row), while that credential exists and the screen runs. A used, expired or unknown ticket gets 401 UNAUTHENTICATED. Compare the bytes with the SHA-256 `read_file` gave, or with the header.
+         */
+        get: operations["downloadFileLink"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -815,7 +859,7 @@ export interface paths {
          * Read the screen's history
          * @description Needs the `read` permission. Answers within 28 s.
          *
-         *     Every call made on the screen, newest first: what was called, its parameters and typed text, which key or app called it, its run label, the result, how long it took and the screenshot it returned. Changes to the screen are rows too. Kept 30 days. With detailed history off, rows keep only what was called, by whom, when and the result. The live view is never recorded, and typed text that matches an organization secret is replaced. Rows are written after the reply, never on the call's path. To follow live, pass `since` (a row id) with `wait_s` and get newer rows oldest first.
+         *     Every call made on the screen, newest first: what was called, its parameters and typed text, which key or app called it, its run label, the result, how long it took and the screenshot it returned. Changes to the screen are rows too. Kept 30 days, also after the screen is deleted: a deleted screen's history stays readable by its id, read only. With detailed history off, rows keep only what was called, by whom, when and the result. The live view is never recorded, and typed text that matches an organization secret is replaced. Rows are written after the reply, never on the call's path. To follow live, pass `since` (a row id) with `wait_s` and get newer rows oldest first.
          */
         get: operations["listHistory"];
         put?: never;
@@ -837,7 +881,7 @@ export interface paths {
          * Get a saved screenshot
          * @description Needs the `read` permission. Answers within 5 s.
          *
-         *     The exact image a call returned, from the screen's history, as image bytes. Kept 30 days, then 404 NOT_FOUND. Nothing is saved while detailed history is off.
+         *     The exact image a call returned, from the screen's history, as image bytes. Kept 30 days, also after the screen is deleted (by its id), then 404 NOT_FOUND. Nothing is saved while detailed history is off.
          */
         get: operations["getSavedScreenshot"];
         put?: never;
@@ -995,7 +1039,7 @@ export interface components {
          *     - `NOT_FOUND` (404): No such operation, exec, key, app, export, template, snapshot or saved screenshot (saved ones go after 30 days). Check the id.
          *     - `FILE_NOT_FOUND` (404): Nothing at that path on the screen. List the folder with listFiles.
          *     - `NO_CAPACITY` (409): No free machine for a new screen right now; nothing was charged. Retry after retry_after.
-         *     - `STALE_OBSERVATION` (409): Input ran (anyone's, a person's in the live view included) or the screen restarted since your screenshot (details.acted_since, details.restarted). Take a new screenshot first.
+         *     - `STALE_OBSERVATION` (409): Input ran (anyone's, a person's in the live view included) or the screen restarted since your screenshot (details.acted_since, details.restarted). Act on details.latest_screenshot_id if present, else take a new screenshot.
          *     - `CONTROL_HELD` (409): A person has control of this screen, so nothing ran. Control ends when they release it, or after 5 minutes with no input from them. Wait retry_after seconds, then take a new screenshot before acting.
          *     - `SCREEN_NOT_RUNNING` (409): The screen is stopped, starting or stopping. Start it, or wait on its operation.
          *     - `OPERATION_IN_PROGRESS` (409): Another power operation runs on this screen. Wait on it, then retry.
@@ -1028,6 +1072,11 @@ export interface components {
             reason?: ("missing" | "malformed" | "unknown_key" | "revoked" | "expired") | string;
             needed?: components["schemas"]["Permission"];
             has?: components["schemas"]["Permission"][];
+            /** @description INVALID_ARGUMENT for a missing `screen`, SCREEN_NOT_FOUND: the screens the credential can use. */
+            choices?: {
+                id: string;
+                name: string;
+            }[];
             /**
              * Format: int32
              * @description STALE_OBSERVATION: input actions run since your screenshot.
@@ -1035,6 +1084,8 @@ export interface components {
             acted_since?: number;
             /** @description STALE_OBSERVATION: the screen restarted since your screenshot. */
             restarted?: boolean;
+            /** @description STALE_OBSERVATION: the newest screenshot, taken after the last input, so still current; absent when none was. */
+            latest_screenshot_id?: string;
             /** Format: int32 */
             action_index?: number;
             /** Format: int32 */
@@ -1263,6 +1314,86 @@ export interface components {
              */
             since: string;
         };
+        /**
+         * SpendHour
+         * @description One UTC hour of a disposable screen's meter.
+         */
+        SpendHour: {
+            /**
+             * Format: date-time
+             * @description The UTC hour's start.
+             */
+            hour: string;
+            /**
+             * Format: int32
+             * @description Seconds run in the hour.
+             */
+            running_s: number;
+            /**
+             * Format: int32
+             * @description Seconds stopped in the hour.
+             */
+            stopped_s: number;
+            /**
+             * Format: int32
+             * @description Billing steps charged in the hour, each as it started.
+             */
+            steps: number;
+            /**
+             * Format: double
+             * @description Credit charged in the hour, at the list price in force.
+             */
+            charged_usd: number;
+            /**
+             * Format: double
+             * @description The list price of an hour running.
+             */
+            running_hour_usd: number;
+            /**
+             * Format: double
+             * @description The list price of an hour stopped.
+             */
+            stopped_hour_usd: number;
+            /**
+             * Format: int32
+             * @description The billing step.
+             */
+            step_s: number;
+        };
+        /**
+         * ScreenSpendRecord
+         * @description What a disposable screen cost, from Kubi's meter, at list prices. Readable after the screen is deleted.
+         */
+        ScreenSpendRecord: {
+            screen_id: string;
+            name: string;
+            /** @description The screen's state, `deleted` included. */
+            state: string;
+            /** @description true: the screen is deleted and its figures will not change. */
+            final: boolean;
+            /**
+             * Format: int64
+             * @description Seconds it has run as a disposable screen.
+             */
+            running_s: number;
+            /**
+             * Format: int64
+             * @description Seconds it has been stopped as a disposable screen.
+             */
+            stopped_s: number;
+            /**
+             * Format: double
+             * @description Credit charged for it, the step now running included.
+             */
+            charged_usd: number;
+            /** @description Its meter per UTC hour, oldest first. */
+            hours: components["schemas"]["SpendHour"][];
+            /**
+             * Format: date-time
+             * @description The time the figures count up to.
+             */
+            as_of: string;
+        };
         /** Screen */
         Screen: {
             id: string;
@@ -1473,8 +1604,10 @@ export interface components {
             data: string;
             /** @description With `windows=true`: the open windows, topmost first, in this screenshot's pixels (a region's: the full screenshot's). Normal windows and dialogs only; at most 50. */
             windows?: components["schemas"]["WindowInfo"][];
-            /** @description With `marks=true`: the elements whose ids are drawn on the image, bound to this screenshot_id for `element` in runActions. */
+            /** @description With `marks=true`: the elements whose ids are drawn on the image, bound to this screenshot_id for `element` in runActions. An element under a window, a dialog or an open list drawn over it has no mark. */
             marks?: components["schemas"]["Mark"][];
+            /** @description With `marks=true`: false when reading the windows' elements stopped early (the time or element cap), so some elements have no mark; readTree lists them. */
+            marks_complete?: boolean;
         };
         /**
          * WindowId
@@ -2075,6 +2208,8 @@ export interface components {
          * @description How the tree after a batch is read.
          */
         TreeOptions: {
+            /** @description A window id, or `all` for every open window, as in getAccessibilityTree. Default: the window of the last action by element while it is open, else the active window. */
+            window?: string;
             /**
              * Format: int32
              * @default 250
@@ -2140,7 +2275,7 @@ export interface components {
             /** @description Run in order, 100 ms apart. Stops at the first failure; the rest are `not_executed`. The whole batch must fit in 28 s. */
             actions: components["schemas"]["Action"][];
             space?: components["schemas"]["Space"];
-            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. The hosted MCP always sends it. */
+            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted MCP always sends it. */
             screenshot_id?: string;
             /**
              * @description after: attach the screen after the last action that ran, once it settles. if_changed: only if it changed visibly since `screenshot_id` (else `screenshot_unchanged: true`). none: no image. The hosted MCP sends `after`.
@@ -2150,7 +2285,7 @@ export interface components {
             screenshot?: "after" | "if_changed" | "none";
             screenshot_options?: components["schemas"]["ScreenshotOptions"];
             /**
-             * @description after: attach an accessibility tree after the batch, bound to the after-screenshot's id (or a new one), so its ids are ready for the next call. It reads the window of the last action by element while that window is open, else the active window.
+             * @description after: attach an accessibility tree after the batch, bound to the after-screenshot's id (or a new one), so its ids are ready for the next call. It reads the window of the last action by element while that window is open, else the active window, or `tree_options.window`.
              * @default none
              * @enum {string}
              */
@@ -2191,6 +2326,8 @@ export interface components {
              * @description launch: its process id.
              */
             pid?: number;
+            /** @description A click by element: the element the tree shows drawn over its middle, such as a banner's button. The click went to a part of the element clear of it; with no part clear, to its middle, where it may have hit that element instead. */
+            covered_by?: string;
             /** Format: int32 */
             duration_ms: number;
         };
@@ -2264,12 +2401,22 @@ export interface components {
             stderr: string;
             /**
              * Format: int64
-             * @description Total bytes written so far. Use as the next stdout_from.
+             * @description Total bytes written so far, the whole stream.
              */
             stdout_bytes: number;
             /** Format: int64 */
             stderr_bytes: number;
-            /** @description Older output fell out of the 1 MiB per-stream buffer. */
+            /**
+             * Format: int64
+             * @description The byte offset right after the stdout this reply carries: the next stdout_from. A reply ends on a whole character, so this can sit before stdout_bytes.
+             */
+            stdout_next?: number;
+            /**
+             * Format: int64
+             * @description The same for stderr: the next stderr_from.
+             */
+            stderr_next?: number;
+            /** @description The offsets asked for output that fell out of the last 16 MiB a stream keeps (1 MiB once older finished commands fill their shared 256 MiB); the reply starts at the oldest byte kept. */
             output_dropped?: boolean;
             /** Format: int32 */
             incarnation: number;
@@ -2479,13 +2626,14 @@ export interface components {
         };
         /**
          * HistoryEntry
-         * @description One call or event. Kept 30 days.
+         * @description One call or event. Kept 30 days, also after its screen is deleted.
          */
         HistoryEntry: {
             id: string;
             /** Format: date-time */
             at: string;
             screen_id?: string | null;
+            screen_name?: string | null;
             screen_kind?: components["schemas"]["ScreenKind"] | null;
             /** @description `call` for a call on the screen; otherwise an event such as screen.created, screen.deleted, key.created, key.revoked, app.connected, secret.set, proxy.set, control.taken or control.released. New kinds may appear. */
             kind: string;
@@ -2657,7 +2805,7 @@ export interface components {
              */
             count?: number;
             modifiers?: components["schemas"]["Modifiers"];
-            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. The hosted MCP always sends it. */
+            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted MCP always sends it. */
             screenshot_id?: string;
             /**
              * @description after: attach the screen after the last action that ran, once it settles. if_changed: only if it changed visibly since `screenshot_id` (else `screenshot_unchanged: true`). none: no image. The hosted MCP sends `after`.
@@ -2688,7 +2836,7 @@ export interface components {
              * @enum {string}
              */
             via?: "keys" | "paste";
-            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. The hosted MCP always sends it. */
+            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted MCP always sends it. */
             screenshot_id?: string;
             /**
              * @description after: attach the screen after the last action that ran, once it settles. if_changed: only if it changed visibly since `screenshot_id` (else `screenshot_unchanged: true`). none: no image. The hosted MCP sends `after`.
@@ -2716,7 +2864,7 @@ export interface components {
              * @default 0
              */
             hold_ms?: number;
-            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. The hosted MCP always sends it. */
+            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted MCP always sends it. */
             screenshot_id?: string;
             /**
              * @description after: attach the screen after the last action that ran, once it settles. if_changed: only if it changed visibly since `screenshot_id` (else `screenshot_unchanged: true`). none: no image. The hosted MCP sends `after`.
@@ -2751,7 +2899,7 @@ export interface components {
              */
             unit?: "notch" | "px";
             modifiers?: components["schemas"]["Modifiers"];
-            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. The hosted MCP always sends it. */
+            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted MCP always sends it. */
             screenshot_id?: string;
             /**
              * @description after: attach the screen after the last action that ran, once it settles. if_changed: only if it changed visibly since `screenshot_id` (else `screenshot_unchanged: true`). none: no image. The hosted MCP sends `after`.
@@ -2770,7 +2918,7 @@ export interface components {
             path: components["schemas"]["Point"][];
             button?: components["schemas"]["MouseButton"];
             modifiers?: components["schemas"]["Modifiers"];
-            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. The hosted MCP always sends it. */
+            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted MCP always sends it. */
             screenshot_id?: string;
             /**
              * @description after: attach the screen after the last action that ran, once it settles. if_changed: only if it changed visibly since `screenshot_id` (else `screenshot_unchanged: true`). none: no image. The hosted MCP sends `after`.
@@ -2795,7 +2943,7 @@ export interface components {
              * @default 0
              */
             dwell_ms?: number;
-            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. The hosted MCP always sends it. */
+            /** @description Optional precondition and coordinate default: the screenshot you acted on. If any input ran after it (a person's in the live view included) or the screen restarted, nothing runs: 409 STALE_OBSERVATION. A batch with no input (only wait, settle, cursor_position, screenshot and zoom) runs anyway. The hosted MCP always sends it. */
             screenshot_id?: string;
             /**
              * @description after: attach the screen after the last action that ran, once it settles. if_changed: only if it changed visibly since `screenshot_id` (else `screenshot_unchanged: true`). none: no image. The hosted MCP sends `after`.
@@ -3090,6 +3238,8 @@ export type StateReason = components['schemas']['StateReason'];
 export type ScreenColor = components['schemas']['ScreenColor'];
 export type ScreenKind = components['schemas']['ScreenKind'];
 export type ScreenSpend = components['schemas']['ScreenSpend'];
+export type SpendHour = components['schemas']['SpendHour'];
+export type ScreenSpendRecord = components['schemas']['ScreenSpendRecord'];
 export type Screen = components['schemas']['Screen'];
 export type ScreenCreate = components['schemas']['ScreenCreate'];
 export type ScreenUpdate = components['schemas']['ScreenUpdate'];
@@ -3477,6 +3627,56 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description Unsupported media type: UNSUPPORTED_MEDIA_TYPE. */
             415: components["responses"]["UnsupportedMediaType"];
+            /** @description Rate limited: RATE_LIMITED. */
+            429: components["responses"]["TooManyRequests"];
+            /** @description Internal error: INTERNAL. */
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getScreenSpend: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional label that groups calls into one run in the screen's history. It is only a label and never locks the screen. The SDK fills it from KUBI_RUN, else Claude Code's CLAUDE_CODE_SESSION_ID, else one id per client it creates.
+                 * @example 6f1c2a90-3d4b-4e8f-9a1c-7b2d5e8f0a13
+                 */
+                "Kubi-Run"?: components["parameters"]["Run"];
+            };
+            path: {
+                /**
+                 * @description Screen id (`scr_...`).
+                 * @example scr_7f2kq9w3x8m4b6tzp1ac
+                 */
+                screen_id: components["parameters"]["ScreenId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    "Billing-Warning": components["headers"]["BillingWarning"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScreenSpendRecord"];
+                };
+            };
+            /** @description Bad request: INVALID_ARGUMENT. */
+            400: components["responses"]["BadRequest"];
+            /** @description Not authenticated: UNAUTHENTICATED. */
+            401: components["responses"]["Unauthorized"];
+            /** @description Not allowed: PERMISSION_DENIED. */
+            403: components["responses"]["Forbidden"];
+            /** @description Not found: SCREEN_NOT_FOUND. */
+            404: components["responses"]["NotFound"];
             /** @description Rate limited: RATE_LIMITED. */
             429: components["responses"]["TooManyRequests"];
             /** @description Internal error: INTERNAL. */
@@ -4295,7 +4495,7 @@ export interface operations {
                 settle?: boolean;
                 /** @description true: also list the open windows (title, app, place, which is active) in `windows`. */
                 windows?: boolean;
-                /** @description true: draw the id of each element an agent can act on in the active window on the image, list them in `marks` and bind them to this screenshot_id, so a model can act by `element` without reading the tree. 409 UNSUPPORTED_CAPABILITY on a screen that can't read trees. */
+                /** @description true: draw the id of each element an agent can act on in every window that shows, topmost first, on the image, list them in `marks` and bind them to this screenshot_id, so a model can act by `element` without reading the tree. 409 UNSUPPORTED_CAPABILITY on a screen that can't read trees. */
                 marks?: boolean;
             };
             header?: {
@@ -5092,9 +5292,9 @@ export interface operations {
                 wait_s?: components["parameters"]["WaitS"];
                 /** @description What ends a long poll: `exit` (default) or `output`. */
                 until?: "exit" | "output";
-                /** @description Byte offset in stdout to read from (the last reply's stdout_bytes). */
+                /** @description Byte offset in stdout to read from. To follow a command, the last reply's stdout_next. */
                 stdout_from?: number;
-                /** @description Byte offset in stderr to read from (the last reply's stderr_bytes). */
+                /** @description Byte offset in stderr to read from. To follow a command, the last reply's stderr_next. */
                 stderr_from?: number;
                 /** @description Bytes of output per stream in this reply. */
                 max_bytes?: number;
@@ -5356,6 +5556,61 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
             /** @description Internal error: INTERNAL. */
             500: components["responses"]["InternalError"];
+            /** @description Screen unavailable: SCREEN_UNAVAILABLE. */
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    downloadFileLink: {
+        parameters: {
+            query: {
+                /**
+                 * @description The link's ticket.
+                 * @example fl_4Hq8mZ2kP9xW3nR7bT5c6Yd1Lf0Ga8Ks
+                 */
+                t: string;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description Screen id (`scr_...`).
+                 * @example scr_7f2kq9w3x8m4b6tzp1ac
+                 */
+                screen_id: components["parameters"]["ScreenId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "Request-Id": components["headers"]["RequestId"];
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimitPolicy"];
+                    Deprecation: components["headers"]["Deprecation"];
+                    Sunset: components["headers"]["Sunset"];
+                    /** @description SHA-256 of the file. */
+                    "Kubi-File-Sha256"?: string;
+                    /** @description attachment, with the file's name. */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Bad request: INVALID_ARGUMENT. */
+            400: components["responses"]["BadRequest"];
+            /** @description Not authenticated: UNAUTHENTICATED. */
+            401: components["responses"]["Unauthorized"];
+            /** @description Not found: FILE_NOT_FOUND. */
+            404: components["responses"]["NotFound"];
+            /** @description Conflict with the screen's state: CONTROL_HELD, SCREEN_NOT_RUNNING. */
+            409: components["responses"]["Conflict"];
+            /** @description Too large: PAYLOAD_TOO_LARGE. */
+            413: components["responses"]["PayloadTooLarge"];
+            /** @description Rate limited: RATE_LIMITED. */
+            429: components["responses"]["TooManyRequests"];
             /** @description Screen unavailable: SCREEN_UNAVAILABLE. */
             503: components["responses"]["Unavailable"];
         };
